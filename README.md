@@ -20,3 +20,17 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 - Frontend: Vercel
 - Backend: Render
 - Database: MongoDB Atlas
+
+### Vercel setup
+
+1. Create a Vercel project from this repository.
+2. In Vercel project settings, set environment variable:
+   - `VITE_API_BASE_URL`: `https://<your-backend-url>`
+3. `vercel.json` is already configured to deploy `frontend/` as a static site.
+
+### Render setup
+
+1. Create a Render Web Service in your Render account.
+2. Use `render.yaml` to configure the backend service.
+3. Add the same environment variables shown in `render.yaml` using Render secrets or env vars:
+   - `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`

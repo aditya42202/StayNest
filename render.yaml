@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: staynest-backend
+    env: node
+    plan: starter
+    region: oregon
+    repo: https://github.com/<your-github-username>/<your-repo-name>
+    branch: main
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    instanceCount: 1
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        value: $MONGO_URI
+      - key: JWT_SECRET
+        value: $JWT_SECRET
+      - key: CLIENT_URL
+        value: $CLIENT_URL
+      - key: CLOUDINARY_CLOUD_NAME
+        value: $CLOUDINARY_CLOUD_NAME
+      - key: CLOUDINARY_API_KEY
+        value: $CLOUDINARY_API_KEY
+      - key: CLOUDINARY_API_SECRET
+        value: $CLOUDINARY_API_SECRET
+      - key: STRIPE_SECRET_KEY
+        value: $STRIPE_SECRET_KEY
+      - key: GOOGLE_CLIENT_ID
+        value: $GOOGLE_CLIENT_ID
+      - key: EMAIL_HOST
+        value: $EMAIL_HOST
+      - key: EMAIL_PORT
+        value: $EMAIL_PORT
+      - key: EMAIL_USER
+        value: $EMAIL_USER
+      - key: EMAIL_PASS
+        value: $EMAIL_PASS
