@@ -38,10 +38,16 @@ const SearchResultsPage = () => {
   useEffect(() => {
     const fetchProperties = async () => {
       setLoading(true);
-      const query = Object.fromEntries(searchParams.entries());
-      const { data } = await apiClient.get('/properties/search', { params: query });
-      setProperties(data.properties || []);
-      setLoading(false);
+      try {
+        const query = Object.fromEntries(searchParams.entries());
+        const { data } = await apiClient.get('/properties/search', { params: query });
+        setProperties(data.properties || []);
+      } catch (error) {
+        console.error('Failed to fetch properties', error);
+        setProperties([]);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchProperties();
   }, [searchParams]);
