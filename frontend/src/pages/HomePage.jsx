@@ -37,7 +37,20 @@ const HomePage = () => {
   }, []);
 
   const handleCategorySearch = (category) => {
-    navigate(`/search?category=${encodeURIComponent(category)}`);
+    const normalize = (c) => {
+      const map = {
+        'Boys PG': 'boys pg',
+        'Girls PG': 'girls pg',
+        'Hostel': 'hostel',
+        'Shared Room': 'shared room',
+        'Private Room': 'private room',
+        'Flat': 'flat',
+        'House': 'house',
+        'PG': 'pg'
+      };
+      return map[c] || c.toLowerCase();
+    };
+    navigate(`/search?category=${encodeURIComponent(normalize(category))}`);
   };
 
   return (
@@ -83,7 +96,20 @@ const HomePage = () => {
                     onClick={() => {
                       if (item === 'Near College') return navigate('/search?q=near+college');
                       if (item === 'Low to High Rent') return navigate('/search?sort=rent_asc');
-                      return navigate(`/search?category=${encodeURIComponent(item)}`);
+                      const normalize = (c) => {
+                        const map = {
+                          'Boys PG': 'boys pg',
+                          'Girls PG': 'girls pg',
+                          'Hostel': 'hostel',
+                          'Shared Room': 'shared room',
+                          'Private Room': 'private room',
+                          'Flat': 'flat',
+                          'House': 'house',
+                          'PG': 'pg'
+                        };
+                        return map[c] || c.toLowerCase();
+                      };
+                      return navigate(`/search?category=${encodeURIComponent(normalize(item))}`);
                     }}
                     className="rounded-full border border-slate-800 bg-slate-900/80 px-4 py-2 transition hover:border-blue-500/60 hover:text-white"
                   >
