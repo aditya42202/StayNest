@@ -30,23 +30,27 @@ const clientUrls = (
   process.env.CLIENT_URL || "http://localhost:5173"
 )
   .split(",")
-  .map((url) => url.trim());
+  .map(url => url.trim());
 
-// CORS
 app.use(
   cors({
-    origin: (origin, callback) => {
-      const isLocalOrigin =
-        origin?.startsWith("http://localhost") ||
-        origin?.startsWith("http://127.0.0.1");
+    origin(origin, callback) {
 
-      if (!origin || clientUrls.includes(origin) || isLocalOrigin) {
+      if (!origin)
+        return callback(null, true);
+
+      if (
+        clientUrls.includes(origin) ||
+        origin.startsWith("http://localhost") ||
+        origin.startsWith("http://127.0.0.1") ||
+        origin.endsWith(".vercel.app")
+      ) {
         return callback(null, true);
       }
 
-      return callback(new Error(`Not allowed by CORS: ${origin}`));
+      callback(new Error("CORS Blocked"));
     },
-    credentials: true,
+    credentials: true
   })
 );
 
