@@ -78,7 +78,15 @@ const HomePage = () => {
 
               <div className="mt-5 flex flex-wrap gap-3 text-sm text-slate-400">
                 {['Near College', 'Boys PG', 'Girls PG', 'Low to High Rent', 'Hostel'].map((item) => (
-                  <button key={item} className="rounded-full border border-slate-800 bg-slate-900/80 px-4 py-2 transition hover:border-blue-500/60 hover:text-white">
+                  <button
+                    key={item}
+                    onClick={() => {
+                      if (item === 'Near College') return navigate('/search?q=near+college');
+                      if (item === 'Low to High Rent') return navigate('/search?sort=rent_asc');
+                      return navigate(`/search?category=${encodeURIComponent(item)}`);
+                    }}
+                    className="rounded-full border border-slate-800 bg-slate-900/80 px-4 py-2 transition hover:border-blue-500/60 hover:text-white"
+                  >
                     {item}
                   </button>
                 ))}
