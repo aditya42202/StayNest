@@ -40,7 +40,9 @@ const SearchResultsPage = () => {
       setLoading(true);
       try {
         const query = Object.fromEntries(searchParams.entries());
+        console.debug('SearchResultsPage - query params:', query);
         const { data } = await apiClient.get('/properties/search', { params: query });
+        console.debug('SearchResultsPage - response:', data);
         setProperties(data.properties || []);
       } catch (error) {
         console.error('Failed to fetch properties', error);
@@ -78,7 +80,10 @@ const SearchResultsPage = () => {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_0.6fr]">
           <div className="space-y-6">
-            {properties.map((property) => (
+            {properties.length === 0 ? (
+              <div className="rounded-[32px] bg-slate-900/80 p-16 text-center text-slate-400">No properties found for these filters.</div>
+            ) : (
+              properties.map((property) => (
               <Link key={property._id} to={`/property/${property._id}`} className="group block overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/80 p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-200">{property.category}</span>
