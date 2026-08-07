@@ -54,6 +54,17 @@ export const getBookingById = async (req, res) => {
     res.status(404);
     throw new Error('Booking not found');
   }
+  // Authorization: only student who made booking, owner of property, or admin can view
+  const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  const isOwner = booking.owner && booking.owner._id ? booking.owner._id.toString() === userId : booking.owner && booking.owner.toString() === userId;
+  const isStudent = booking.student && booking.student._id ? booking.student._id.toString() === userId : booking.student && booking.student.toString() === userId;
+  const isAdmin = req.user && req.user.role === 'admin';
+
+  if (!isAdmin && !isOwner && !isStudent) {
+    res.status(403);
+    throw new Error('Forbidden: insufficient permissions to view this booking');
+  }
+
   res.json(booking);
 };
 
