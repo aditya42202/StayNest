@@ -4,6 +4,7 @@ import {
   getOwnerDashboard,
   getOwnerProperties,
   getOwnerBookingRequests,
+  getOwnerBookings,
   verifyBookingRequest
 } from '../controllers/ownerController.js';
 
@@ -13,6 +14,7 @@ router.use(protect, authorize('owner'));
 router.get('/dashboard', getOwnerDashboard);
 router.get('/properties', getOwnerProperties);
 router.get('/booking-requests', getOwnerBookingRequests);
+router.get('/bookings', getOwnerBookings);
 router.put('/booking-requests/:id', verifyBookingRequest);
 
 export default router;

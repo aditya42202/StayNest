@@ -1,6 +1,5 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
-import User from '../models/User.js';
 
 export const getOwnerDashboard = async (req, res) => {
   const propertyCount = await Property.countDocuments({ owner: req.user._id });
@@ -25,13 +24,33 @@ export const getOwnerBookingRequests = async (req, res) => {
   res.json({ requests });
 };
 
+export const getOwnerBookings = async (req, res) => {
+  const bookings = await Booking.find({ owner: req.user._id })
+    .populate('student', 'name email phone')
+    .populate('property', 'title city area')
+    .populate('room', 'name type price')
+    .sort({ createdAt: -1 });
+  res.json({ bookings });
+};
+
 export const verifyBookingRequest = async (req, res) => {
+  const { status } = req.body;
+  if (!['approved', 'rejected'].includes(status)) {
+    res.status(400);
+    throw new Error('Booking status must be approved or rejected');
+  }
+
   const booking = await Booking.findById(req.params.id);
   if (!booking || booking.owner.toString() !== req.user._id.toString()) {
     res.status(404);
     throw new Error('Booking request not found');
   }
-  booking.status = req.body.status;
+  if (booking.status !== 'pending') {
+    res.status(400);
+    throw new Error('Only pending booking requests can be reviewed');
+  }
+
+  booking.status = status;
   await booking.save();
   res.json(booking);
 };

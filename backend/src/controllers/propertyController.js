@@ -1,4 +1,5 @@
 import Property from '../models/Property.js';
+import Booking from '../models/Booking.js';
 import User from '../models/User.js';
 
 export const getProperties = async (req, res) => {
@@ -104,7 +105,29 @@ export const updateProperty = async (req, res) => {
     throw new Error('Not authorized to edit this property');
   }
 
-  Object.assign(property, req.body);
+  const editableFields = [
+    'title',
+    'description',
+    'category',
+    'type',
+    'city',
+    'area',
+    'college',
+    'landmark',
+    'address',
+    'rent',
+    'deposit',
+    'amenities',
+    'images',
+    'videos',
+    'mapLocation',
+    'available'
+  ];
+  editableFields.forEach((field) => {
+    if (Object.hasOwn(req.body, field)) {
+      property[field] = req.body[field];
+    }
+  });
   await property.save();
   res.json(property);
 };
@@ -120,7 +143,14 @@ export const deleteProperty = async (req, res) => {
     throw new Error('Not authorized to delete this property');
   }
 
-  await property.remove();
+  const bookingCount = await Booking.countDocuments({ property: property._id });
+  if (bookingCount > 0) {
+    res.status(400);
+    throw new Error('This property has booking history and cannot be deleted. Mark it unavailable instead.');
+  }
+
+  await property.deleteOne();
+  await User.findByIdAndUpdate(property.owner, { $pull: { properties: property._id } });
   res.json({ message: 'Property removed successfully' });
 };
 
