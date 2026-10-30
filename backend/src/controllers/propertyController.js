@@ -74,7 +74,7 @@ export const getPropertyById = async (req, res) => {
 };
 
 export const createProperty = async (req, res) => {
-  const { title, description, category, city, area, college, landmark, address, rent, deposit, amenities, lat, lng, images } = req.body;
+  const { title, description, category, city, area, college, landmark, address, rent, rentPerDay, rentPerHour, deposit, amenities, lat, lng, images } = req.body;
 
   const property = await Property.create({
     owner: req.user._id,
@@ -87,6 +87,8 @@ export const createProperty = async (req, res) => {
     landmark,
     address,
     rent,
+    rentPerDay,
+    rentPerHour,
     deposit,
     amenities,
     images,
@@ -119,6 +121,8 @@ export const updateProperty = async (req, res) => {
     'landmark',
     'address',
     'rent',
+    'rentPerDay',
+    'rentPerHour',
     'deposit',
     'amenities',
     'images',

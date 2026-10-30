@@ -27,6 +27,8 @@ const emptyPropertyForm = () => ({
   landmark: '',
   address: '',
   rent: '',
+  rentPerDay: '',
+  rentPerHour: '',
   deposit: '',
   amenities: '',
   images: '',
@@ -34,18 +36,16 @@ const emptyPropertyForm = () => ({
   lng: ''
 });
 
-const dateLabel = (value) => (value ? new Date(value).toLocaleDateString() : 'Not specified');
-const dateInputValue = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const dateLabel = (value) => (value ? new Date(value).toLocaleString() : 'Not specified');
+const dateTimeInputValue = (date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return localDate.toISOString().slice(0, 16);
 };
-const nextDateInputValue = (value) => {
-  if (!value) return dateInputValue(new Date());
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + 1);
-  return dateInputValue(date);
+const nextDateTimeInputValue = (value) => {
+  if (!value) return dateTimeInputValue(new Date());
+  const date = new Date(value);
+  date.setHours(date.getHours() + 1);
+  return dateTimeInputValue(date);
 };
 
 const OwnerDashboardPage = () => {
@@ -121,6 +121,8 @@ const OwnerDashboardPage = () => {
       landmark: property.landmark || '',
       address: property.address || '',
       rent: property.rent ?? '',
+      rentPerDay: property.rentPerDay ?? '',
+      rentPerHour: property.rentPerHour ?? '',
       deposit: property.deposit ?? '',
       amenities: (property.amenities || []).join(', '),
       images: (property.images || []).join('\n'),
@@ -146,6 +148,8 @@ const OwnerDashboardPage = () => {
     const payload = {
       ...propertyForm,
       rent: Number(propertyForm.rent),
+      rentPerDay: propertyForm.rentPerDay === '' ? null : Number(propertyForm.rentPerDay),
+      rentPerHour: propertyForm.rentPerHour === '' ? null : Number(propertyForm.rentPerHour),
       deposit: Number(propertyForm.deposit || 0),
       amenities: propertyForm.amenities.split(',').map((item) => item.trim()).filter(Boolean),
       images: propertyForm.images.split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
@@ -233,7 +237,20 @@ const OwnerDashboardPage = () => {
       const { data } = await verifyBookingRequest(booking._id, status, dates);
       setRequests((current) => current.filter((request) => request._id !== booking._id));
       setBookings((current) => current.map((item) => item._id === booking._id
-        ? { ...item, status: data.status, checkIn: data.checkIn, checkOut: data.checkOut, totalPrice: data.totalPrice }
+        ? {
+          ...item,
+          status: data.status,
+          checkIn: data.checkIn,
+          checkOut: data.checkOut,
+          billingUnit: data.billingUnit,
+          paymentPlan: data.paymentPlan,
+          totalPrice: data.totalPrice,
+          amountPaid: data.amountPaid,
+          installmentRate: data.installmentRate,
+          nextPaymentAmount: data.nextPaymentAmount,
+          nextPaymentDueAt: data.nextPaymentDueAt,
+          paymentStatus: data.paymentStatus
+        }
         : item));
       setReviewingBookingId('');
       setReviewDates({ checkIn: '', checkOut: '' });
@@ -395,6 +412,12 @@ const OwnerDashboardPage = () => {
                 <label className="text-sm text-slate-300">Rent per month (₹)
                   <input name="rent" type="number" min="1" value={propertyForm.rent} onChange={handlePropertyChange} required className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white" />
                 </label>
+                <label className="text-sm text-slate-300">Rent per day (₹, optional)
+                  <input name="rentPerDay" type="number" min="0.01" step="0.01" value={propertyForm.rentPerDay} onChange={handlePropertyChange} placeholder="Monthly rent ÷ 30" className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500" />
+                </label>
+                <label className="text-sm text-slate-300">Rent per hour (₹, optional)
+                  <input name="rentPerHour" type="number" min="0.01" step="0.01" value={propertyForm.rentPerHour} onChange={handlePropertyChange} placeholder="Daily rent ÷ 24" className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500" />
+                </label>
                 <label className="text-sm text-slate-300">Deposit (₹)
                   <input name="deposit" type="number" min="0" value={propertyForm.deposit} onChange={handlePropertyChange} className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white" />
                 </label>
@@ -440,6 +463,7 @@ const OwnerDashboardPage = () => {
                       <Link to={`/property/${property._id}`} className="text-xl font-semibold hover:text-blue-200">{property.title}</Link>
                       <p className="mt-2 text-sm capitalize text-slate-400">{property.category} · {property.area}, {property.city}</p>
                       <p className="mt-1 text-slate-300">₹{property.rent}/month · Deposit ₹{property.deposit || 0}</p>
+                      <p className="mt-1 text-sm text-slate-400">₹{(property.rentPerDay || property.rent / 30).toFixed(2)}/day · ₹{(property.rentPerHour || property.rent / 720).toFixed(2)}/hour</p>
                     </div>
                     <span className={`rounded-full px-3 py-1 text-sm ${property.available ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-700 text-slate-300'}`}>
                       {property.available ? 'Available' : 'Unavailable'}
@@ -479,7 +503,10 @@ const OwnerDashboardPage = () => {
                 <p>Room: {booking.room?.name || 'Not specified'}</p>
                 <p>Check-in: {dateLabel(booking.checkIn)}</p>
                 <p>Check-out: {dateLabel(booking.checkOut)}</p>
-                <p>Total: ₹{booking.totalPrice}</p>
+                <p className="capitalize">Billing: {booking.billingUnit || 'month'} · {booking.paymentPlan || 'upfront'}</p>
+                <p>Stay total: ₹{booking.totalPrice}</p>
+                {booking.amountPaid > 0 && <p>Paid: ₹{booking.amountPaid}</p>}
+                {booking.paymentStatus === 'partial' && <p>Next installment: ₹{booking.nextPaymentAmount} · Due {dateLabel(booking.nextPaymentDueAt)}</p>}
                 <p className="capitalize">Payment: {booking.paymentStatus}</p>
                 <p>Requested: {dateLabel(booking.createdAt)}</p>
               </div>
@@ -489,10 +516,10 @@ const OwnerDashboardPage = () => {
                     <div className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-5">
                       <p className="text-sm text-slate-300">Choose move-in and move-out dates before approving this request.</p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <label className="text-sm text-slate-300">Check-in
+                        <label className="text-sm text-slate-300">Start date and time
                           <input
-                            type="date"
-                            min={dateInputValue(new Date())}
+                            type="datetime-local"
+                            min={dateTimeInputValue(new Date(Date.now() + 60 * 1000))}
                             value={reviewDates.checkIn}
                             onChange={(event) => setReviewDates((current) => ({
                               checkIn: event.target.value,
@@ -501,10 +528,10 @@ const OwnerDashboardPage = () => {
                             className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white"
                           />
                         </label>
-                        <label className="text-sm text-slate-300">Check-out
+                        <label className="text-sm text-slate-300">End date and time
                           <input
-                            type="date"
-                            min={nextDateInputValue(reviewDates.checkIn)}
+                            type="datetime-local"
+                            min={nextDateTimeInputValue(reviewDates.checkIn)}
                             value={reviewDates.checkOut}
                             onChange={(event) => setReviewDates((current) => ({ ...current, checkOut: event.target.value }))}
                             className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white"

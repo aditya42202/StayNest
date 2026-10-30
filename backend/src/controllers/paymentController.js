@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import Payment from '../models/Payment.js';
 import Booking from '../models/Booking.js';
+import { addBillingPeriod } from '../utils/rentalPricing.js';
 
 const getStripeClient = (res) => {
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -21,19 +22,32 @@ const completeCheckoutPayment = async (session) => {
   const { bookingId, userId } = session.metadata || {};
   if (!bookingId || !userId) return null;
 
-  const payment = await Payment.findOne({ booking: bookingId, user: userId, transactionId: session.id });
-  if (!payment) return null;
+  const pendingPayment = await Payment.findOne({ booking: bookingId, user: userId, transactionId: session.id });
+  if (!pendingPayment) return null;
 
-  payment.status = 'completed';
-  await payment.save();
-
+  const payment = await Payment.findOneAndUpdate(
+    { _id: pendingPayment._id, status: 'pending' },
+    { $set: { status: 'completed' } },
+    { new: true }
+  );
   const booking = await Booking.findOne({ _id: bookingId, student: userId });
-  if (booking && booking.paymentStatus !== 'paid') {
-    booking.paymentStatus = 'paid';
-    await booking.save();
-  }
+  if (!booking) return null;
+  if (!payment) return { payment: pendingPayment, booking };
 
-  return { payment, bookingId };
+  booking.amountPaid = Math.min(booking.totalPrice, (booking.amountPaid || 0) + payment.amount);
+  const remaining = Math.max(0, Math.round((booking.totalPrice - booking.amountPaid) * 100) / 100);
+  if (remaining === 0) {
+    booking.paymentStatus = 'paid';
+    booking.nextPaymentAmount = 0;
+    booking.nextPaymentDueAt = undefined;
+  } else {
+    booking.paymentStatus = 'partial';
+    booking.nextPaymentAmount = Math.min(booking.installmentRate, remaining);
+    booking.nextPaymentDueAt = addBillingPeriod(booking.nextPaymentDueAt || booking.checkIn, booking.billingUnit);
+  }
+  await booking.save();
+
+  return { payment, booking };
 };
 
 export const createCheckoutSession = async (req, res) => {
@@ -57,7 +71,23 @@ export const createCheckoutSession = async (req, res) => {
     res.status(400);
     throw new Error('This booking has already been paid');
   }
-  const amount = booking.totalPrice;
+  if (
+    booking.paymentPlan === 'installments'
+    && (booking.amountPaid || 0) > 0
+    && booking.nextPaymentDueAt
+    && booking.nextPaymentDueAt > new Date()
+  ) {
+    res.status(400);
+    throw new Error(`Your next installment is due on ${booking.nextPaymentDueAt.toLocaleDateString()}`);
+  }
+  const remaining = Math.max(0, booking.totalPrice - (booking.amountPaid || 0));
+  const amount = booking.paymentPlan === 'installments'
+    ? Math.min(booking.nextPaymentAmount || booking.installmentRate, remaining)
+    : remaining;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    res.status(400);
+    throw new Error('There is no outstanding amount for this booking');
+  }
 
   const existingPayment = await Payment.findOne({
     booking: booking._id,
@@ -73,8 +103,11 @@ export const createCheckoutSession = async (req, res) => {
         return res.json({ url: existingSession.url, sessionId: existingSession.id });
       }
       if (existingSession.payment_status === 'paid') {
-        await completeCheckoutPayment(existingSession);
-        return res.status(409).json({ message: 'This booking has already been paid' });
+        const result = await completeCheckoutPayment(existingSession);
+        return res.status(409).json({
+          message: result?.booking?.paymentStatus === 'paid' ? 'This booking has already been paid' : 'The previous installment was paid',
+          paymentStatus: result?.booking?.paymentStatus
+        });
       }
     } catch (sessionError) {
       console.warn('Pending checkout session could not be reused:', sessionError.message);
@@ -122,9 +155,13 @@ export const confirmCheckoutSession = async (req, res) => {
   }
 
   const result = await completeCheckoutPayment(session);
+  const booking = result?.booking || await Booking.findOne({ _id: session.metadata?.bookingId, student: req.user._id });
   res.json({
-    bookingId: result?.bookingId || session.metadata?.bookingId,
-    paymentStatus: result ? 'paid' : 'pending'
+    bookingId: booking?._id || session.metadata?.bookingId,
+    paymentStatus: booking?.paymentStatus || 'unpaid',
+    amountPaid: booking?.amountPaid || 0,
+    nextPaymentAmount: booking?.nextPaymentAmount || 0,
+    nextPaymentDueAt: booking?.nextPaymentDueAt
   });
 };
 

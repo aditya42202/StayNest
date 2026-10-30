@@ -15,7 +15,7 @@ const PropertyDetailsPage = () => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistError, setWishlistError] = useState('');
   const [bookingOpen, setBookingOpen] = useState(false);
-  const [bookingDates, setBookingDates] = useState({ checkIn: '', checkOut: '', roomId: '' });
+  const [bookingDates, setBookingDates] = useState({ roomId: '', billingUnit: 'month', paymentPlan: 'upfront' });
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingMessage, setBookingMessage] = useState('');
   const [bookingError, setBookingError] = useState('');
@@ -142,11 +142,13 @@ const PropertyDetailsPage = () => {
     try {
       const { data } = await createBooking({
         propertyId: id,
-        roomId: bookingDates.roomId || undefined
+        roomId: bookingDates.roomId || undefined,
+        billingUnit: bookingDates.billingUnit,
+        paymentPlan: bookingDates.paymentPlan
       });
       setBookingMessage(data.message || 'Booking request sent to the property owner.');
       setBookingOpen(false);
-      setBookingDates({ checkIn: '', checkOut: '', roomId: '' });
+      setBookingDates({ roomId: '', billingUnit: 'month', paymentPlan: 'upfront' });
     } catch (requestError) {
       setBookingError(requestError.response?.data?.message || 'Unable to send your booking request. Please try again.');
     } finally {
@@ -173,6 +175,11 @@ const PropertyDetailsPage = () => {
     'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80',
     'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80'
   ];
+  const selectedRoom = property.rooms?.find((room) => room._id === bookingDates.roomId);
+  const monthlyRate = selectedRoom?.price || property.rent;
+  const dailyRate = property.rentPerDay || monthlyRate / 30;
+  const hourlyRate = property.rentPerHour || dailyRate / 24;
+  const rentalRates = { hour: hourlyRate, day: dailyRate, month: monthlyRate, year: monthlyRate * 12 };
 
   return (
     <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">
@@ -204,8 +211,9 @@ const PropertyDetailsPage = () => {
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-[28px] bg-slate-900/80 p-6">
-                <p className="text-sm text-slate-400">Rent</p>
-                <p className="mt-2 text-3xl font-semibold text-white">₹{property.rent}/month</p>
+                <p className="text-sm text-slate-400">Rent rates</p>
+                <p className="mt-2 text-xl font-semibold text-white">₹{monthlyRate}/month</p>
+                <p className="mt-1 text-sm text-slate-400">₹{dailyRate.toFixed(2)}/day · ₹{hourlyRate.toFixed(2)}/hour</p>
               </div>
               <div className="rounded-[28px] bg-slate-900/80 p-6">
                 <p className="text-sm text-slate-400">Deposit</p>
@@ -290,7 +298,31 @@ const PropertyDetailsPage = () => {
                     </select>
                   </label>
                 )}
-                <p className="text-sm text-white">Estimated first month: ₹{property.rooms?.find((room) => room._id === bookingDates.roomId)?.price || property.rent}. The owner will confirm your dates when reviewing the request.</p>
+                <label className="block text-sm text-white">
+                  Billing period
+                  <select
+                    value={bookingDates.billingUnit}
+                    onChange={(event) => setBookingDates((current) => ({ ...current, billingUnit: event.target.value }))}
+                    className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
+                  >
+                    <option value="hour">Hourly · ₹{hourlyRate.toFixed(2)}/hour</option>
+                    <option value="day">Daily · ₹{dailyRate.toFixed(2)}/day</option>
+                    <option value="month">Monthly · ₹{monthlyRate}/month</option>
+                    <option value="year">Yearly · ₹{(monthlyRate * 12).toFixed(2)}/year</option>
+                  </select>
+                </label>
+                <label className="block text-sm text-white">
+                  Payment plan
+                  <select
+                    value={bookingDates.paymentPlan}
+                    onChange={(event) => setBookingDates((current) => ({ ...current, paymentPlan: event.target.value }))}
+                    className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
+                  >
+                    <option value="upfront">Pay full stay upfront</option>
+                    <option value="installments">Pay in manual installments</option>
+                  </select>
+                </label>
+                <p className="text-sm text-white">The owner confirms your exact start/end time. Rent is calculated from that duration using the selected rate. Installments are paid manually when due.</p>
                 <button type="submit" disabled={bookingLoading} className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-blue-700 disabled:cursor-wait disabled:opacity-60">
                   {bookingLoading ? 'Sending request...' : 'Send booking request'}
                 </button>

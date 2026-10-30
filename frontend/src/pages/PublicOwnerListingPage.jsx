@@ -20,6 +20,8 @@ const PublicOwnerListingPage = () => {
     landmark: '',
     address: '',
     rent: '',
+    rentPerDay: '',
+    rentPerHour: '',
     deposit: '',
     amenities: '',
     images: '',
@@ -42,6 +44,8 @@ const PublicOwnerListingPage = () => {
       const { data } = await apiClient.post('/properties/owner-listing-requests', {
         ...form,
         rent: Number(form.rent),
+        rentPerDay: form.rentPerDay === '' ? null : Number(form.rentPerDay),
+        rentPerHour: form.rentPerHour === '' ? null : Number(form.rentPerHour),
         deposit: Number(form.deposit || 0),
         amenities: form.amenities.split(',').map((item) => item.trim()).filter(Boolean),
         images: form.images.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
@@ -112,6 +116,12 @@ const PublicOwnerListingPage = () => {
               </label>
               <label className="text-sm text-slate-300">Monthly rent
                 <input name="rent" type="number" min="1" value={form.rent} onChange={handleChange} required className={inputClass} />
+              </label>
+              <label className="text-sm text-slate-300">Daily rent (optional)
+                <input name="rentPerDay" type="number" min="0.01" step="0.01" value={form.rentPerDay} onChange={handleChange} placeholder="Monthly rent ÷ 30" className={inputClass} />
+              </label>
+              <label className="text-sm text-slate-300">Hourly rent (optional)
+                <input name="rentPerHour" type="number" min="0.01" step="0.01" value={form.rentPerHour} onChange={handleChange} placeholder="Daily rent ÷ 24" className={inputClass} />
               </label>
               <label className="text-sm text-slate-300">Deposit
                 <input name="deposit" type="number" min="0" value={form.deposit} onChange={handleChange} className={inputClass} />

@@ -24,6 +24,8 @@ export const submitOwnerListingRequest = async (req, res) => {
   const area = cleanText(req.body.area);
   const address = cleanText(req.body.address);
   const rent = Number(req.body.rent);
+  const rentPerDay = req.body.rentPerDay === '' || req.body.rentPerDay == null ? undefined : Number(req.body.rentPerDay);
+  const rentPerHour = req.body.rentPerHour === '' || req.body.rentPerHour == null ? undefined : Number(req.body.rentPerHour);
   const deposit = req.body.deposit === '' || req.body.deposit == null ? 0 : Number(req.body.deposit);
 
   if (!ownerName || !email || !phone || !title || !description || !city || !area || !address) {
@@ -40,6 +42,10 @@ export const submitOwnerListingRequest = async (req, res) => {
   }
   if (!Number.isFinite(rent) || rent < 1 || !Number.isFinite(deposit) || deposit < 0) {
     return res.status(400).json({ message: 'Please enter a valid rent and deposit.' });
+  }
+  if ((rentPerDay !== undefined && (!Number.isFinite(rentPerDay) || rentPerDay <= 0))
+    || (rentPerHour !== undefined && (!Number.isFinite(rentPerHour) || rentPerHour <= 0))) {
+    return res.status(400).json({ message: 'Daily and hourly rent must be greater than zero when provided.' });
   }
 
   const amenities = Array.isArray(req.body.amenities)
@@ -77,6 +83,8 @@ export const submitOwnerListingRequest = async (req, res) => {
     landmark: cleanText(req.body.landmark),
     address,
     rent,
+    rentPerDay,
+    rentPerHour,
     deposit,
     amenities,
     images
@@ -143,6 +151,8 @@ export const approveOwnerListingRequest = async (req, res) => {
       landmark: listingRequest.landmark,
       address: listingRequest.address,
       rent: listingRequest.rent,
+      rentPerDay: listingRequest.rentPerDay,
+      rentPerHour: listingRequest.rentPerHour,
       deposit: listingRequest.deposit,
       amenities: listingRequest.amenities,
       images: listingRequest.images,

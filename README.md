@@ -37,6 +37,8 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 
 Approved bookings can be paid by the tenant through Stripe Checkout. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` on the backend, then configure the Stripe webhook endpoint as `https://<your-backend-url>/api/payments/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, and `checkout.session.expired` events. Payment is marked complete only after Stripe confirms it.
 
+Owners can set monthly, daily, and hourly rent rates. If daily/hourly rates are omitted, daily defaults to monthly rent divided by 30 and hourly defaults to daily rent divided by 24. Tenants choose hourly, daily, monthly, or yearly billing and either pay upfront or make manual installments. The owner confirms exact start/end times; the backend calculates rent from that duration and the selected rate. Yearly rent is 12 times the monthly rate without a discount.
+
 Admin signup is restricted to the comma-separated email addresses in the backend-only `ADMIN_SIGNUP_EMAILS` environment variable. Tenant and owner signup do not require an allowlisted email.
 
 Password recovery requires the backend email settings (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASS`). Set `CLIENT_URL` to the frontend URL so reset links open the deployed app; `FRONTEND_URL` can be used to override it. Reset links expire after 15 minutes and can only be used once.

@@ -13,6 +13,8 @@ const ownerListingRequestSchema = new mongoose.Schema({
   landmark: { type: String, trim: true, maxlength: 200 },
   address: { type: String, required: true, trim: true, maxlength: 500 },
   rent: { type: Number, required: true, min: 1 },
+  rentPerDay: { type: Number, min: 0 },
+  rentPerHour: { type: Number, min: 0 },
   deposit: { type: Number, default: 0, min: 0 },
   amenities: [{ type: String, trim: true, maxlength: 80 }],
   images: [{ type: String, trim: true, maxlength: 2048 }],

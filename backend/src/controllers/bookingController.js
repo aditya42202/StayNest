@@ -1,9 +1,19 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
 import Room from '../models/Room.js';
+import { getRentalRate } from '../utils/rentalPricing.js';
 
 export const createBooking = async (req, res) => {
-  const { propertyId, roomId } = req.body;
+  const { propertyId, roomId, billingUnit = 'month', paymentPlan = 'upfront' } = req.body;
+
+  if (!['hour', 'day', 'month', 'year'].includes(billingUnit)) {
+    res.status(400);
+    throw new Error('Choose a valid billing period');
+  }
+  if (!['upfront', 'installments'].includes(paymentPlan)) {
+    res.status(400);
+    throw new Error('Choose a valid payment plan');
+  }
 
   const property = await Property.findById(propertyId);
   if (!property || !property.available) {
@@ -24,13 +34,18 @@ export const createBooking = async (req, res) => {
     }
   }
 
-  const monthlyRate = room?.price || property.rent;
+  const rate = getRentalRate(property, room, billingUnit);
   const booking = await Booking.create({
     property: property._id,
     room: room?._id,
     student: req.user._id,
     owner: property.owner,
-    totalPrice: monthlyRate,
+    billingUnit,
+    paymentPlan,
+    totalPrice: rate,
+    amountPaid: 0,
+    installmentRate: rate,
+    nextPaymentAmount: rate,
     paymentStatus: 'unpaid'
   });
 

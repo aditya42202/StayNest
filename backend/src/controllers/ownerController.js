@@ -1,6 +1,7 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
 import Room from '../models/Room.js';
+import { addBillingPeriod, calculateRentalPrice } from '../utils/rentalPricing.js';
 
 export const getOwnerDashboard = async (req, res) => {
   const propertyCount = await Property.countDocuments({ owner: req.user._id });
@@ -60,7 +61,7 @@ export const verifyBookingRequest = async (req, res) => {
       Number.isNaN(checkInDate.getTime()) ||
       Number.isNaN(checkOutDate.getTime()) ||
       checkOutDate <= checkInDate ||
-      checkInDate < new Date(new Date().setUTCHours(0, 0, 0, 0))
+      checkInDate < new Date()
     ) {
       res.status(400);
       throw new Error('Choose a valid future check-in date and a check-out date after check-in');
@@ -74,10 +75,21 @@ export const verifyBookingRequest = async (req, res) => {
     const room = booking.room
       ? await Room.findOne({ _id: booking.room, property: property._id })
       : null;
-    const nights = Math.ceil((checkOutDate - checkInDate) / (24 * 60 * 60 * 1000));
+    const { rate, amount } = calculateRentalPrice({
+      property,
+      room,
+      billingUnit: booking.billingUnit || 'month',
+      checkIn: checkInDate,
+      checkOut: checkOutDate
+    });
     booking.checkIn = checkInDate;
     booking.checkOut = checkOutDate;
-    booking.totalPrice = Math.ceil(nights / 30) * (room?.price || property.rent);
+    booking.totalPrice = amount;
+    booking.amountPaid = 0;
+    booking.installmentRate = rate;
+    booking.nextPaymentAmount = booking.paymentPlan === 'installments' ? Math.min(rate, amount) : amount;
+    booking.nextPaymentDueAt = booking.paymentPlan === 'installments' ? checkInDate : undefined;
+    booking.paymentStatus = 'unpaid';
   }
 
   booking.status = status;

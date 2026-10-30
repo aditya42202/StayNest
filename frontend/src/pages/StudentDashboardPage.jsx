@@ -53,6 +53,7 @@ const StudentDashboardPage = () => {
   }, []);
 
   useEffect(() => {
+    if (loading) return;
     const sessionId = searchParams.get('session_id');
     const paymentResult = searchParams.get('payment');
     if (paymentResult === 'cancelled') {
@@ -68,11 +69,21 @@ const StudentDashboardPage = () => {
       try {
         const { data } = await apiClient.post(`/payments/checkout/${encodeURIComponent(sessionId)}/confirm`);
         if (!active) return;
-        if (data.paymentStatus === 'paid') {
+        if (data.paymentStatus === 'paid' || data.paymentStatus === 'partial') {
           setBookings((current) => current.map((booking) => (
-            booking._id === data.bookingId ? { ...booking, paymentStatus: 'paid' } : booking
+            booking._id === data.bookingId
+              ? {
+                ...booking,
+                paymentStatus: data.paymentStatus,
+                amountPaid: data.amountPaid,
+                nextPaymentAmount: data.nextPaymentAmount,
+                nextPaymentDueAt: data.nextPaymentDueAt
+              }
+              : booking
           )));
-          setPaymentNotice('Rent payment confirmed.');
+          setPaymentNotice(data.paymentStatus === 'paid'
+            ? 'Rent payment confirmed. The full stay is paid.'
+            : 'Installment received. The remaining balance is shown in your bookings.');
         } else {
           setPaymentNotice('Payment is being confirmed. Refresh your bookings shortly.');
         }
@@ -84,7 +95,7 @@ const StudentDashboardPage = () => {
     };
     confirmPayment();
     return () => { active = false; };
-  }, [searchParams, setSearchParams]);
+  }, [loading, searchParams, setSearchParams]);
 
   if (loading) {
     return (
@@ -139,18 +150,30 @@ const StudentDashboardPage = () => {
               </div>
               <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-3">
                 <p>Room: {booking.room?.name || 'Not specified'}</p>
-                <p>Total: ₹{booking.totalPrice}</p>
+                <p>{booking.status === 'pending' ? 'Estimated rate' : 'Stay total'}: ₹{booking.totalPrice}</p>
+                <p className="capitalize">Billing: {booking.billingUnit || 'month'} · {booking.paymentPlan || 'upfront'}</p>
                 <p className="capitalize">Payment: {booking.paymentStatus}</p>
+                {booking.amountPaid > 0 && <p>Paid so far: ₹{booking.amountPaid}</p>}
+                {booking.paymentStatus === 'partial' && <p>Next installment: ₹{booking.nextPaymentAmount} · Due {booking.nextPaymentDueAt ? new Date(booking.nextPaymentDueAt).toLocaleString() : 'soon'}</p>}
               </div>
               {booking.status === 'pending' && <p className="mt-4 text-sm text-slate-400">Payment is available after the owner approves your booking.</p>}
               {booking.status === 'approved' && booking.paymentStatus !== 'paid' && (
                 <button
                   type="button"
-                  disabled={payingBookingId === booking._id}
+                  disabled={payingBookingId === booking._id || (
+                    booking.paymentPlan === 'installments'
+                    && booking.amountPaid > 0
+                    && booking.nextPaymentDueAt
+                    && new Date(booking.nextPaymentDueAt) > new Date()
+                  )}
                   onClick={() => startRentPayment(booking)}
                   className="mt-5 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-50"
                 >
-                  {payingBookingId === booking._id ? 'Opening secure checkout...' : `Pay rent · ₹${booking.totalPrice}`}
+                  {payingBookingId === booking._id
+                    ? 'Opening secure checkout...'
+                    : booking.paymentPlan === 'installments' && booking.amountPaid > 0 && booking.nextPaymentDueAt && new Date(booking.nextPaymentDueAt) > new Date()
+                      ? `Next installment due ${new Date(booking.nextPaymentDueAt).toLocaleString()}`
+                      : `Pay rent · ₹${booking.nextPaymentAmount || booking.totalPrice}`}
                 </button>
               )}
               {booking.status === 'pending' && (

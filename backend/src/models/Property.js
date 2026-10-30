@@ -12,6 +12,8 @@ const propertySchema = new mongoose.Schema({
   landmark: { type: String },
   address: { type: String, required: true },
   rent: { type: Number, required: true },
+  rentPerDay: { type: Number, min: 0 },
+  rentPerHour: { type: Number, min: 0 },
   deposit: { type: Number, default: 0 },
   images: [{ type: String }],
   videos: [{ type: String }],

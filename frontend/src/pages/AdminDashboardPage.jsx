@@ -20,7 +20,7 @@ const tabs = [
   { id: 'bookings', label: 'Bookings' }
 ];
 
-const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : 'Not available');
+const formatDate = (date) => (date ? new Date(date).toLocaleString() : 'Not available');
 
 const AdminDashboardPage = () => {
   const [dashboard, setDashboard] = useState(null);
@@ -379,6 +379,7 @@ const AdminDashboardPage = () => {
                     <p>Owner: {request.ownerName}</p>
                     <p>Phone: <a className="text-blue-200 hover:text-white" href={`tel:${request.phone}`}>{request.phone}</a></p>
                     <p>Email: <a className="text-blue-200 hover:text-white" href={`mailto:${request.email}`}>{request.email}</a></p>
+                    <p>Rates: ₹{request.rent}/month · ₹{(request.rentPerDay || request.rent / 30).toFixed(2)}/day · ₹{(request.rentPerHour || request.rent / 720).toFixed(2)}/hour</p>
                     <p>Deposit: ₹{request.deposit || 0}</p>
                     <p className="sm:col-span-2">Address: {request.address}</p>
                     {request.college && <p>Nearby college: {request.college}</p>}
@@ -428,7 +429,10 @@ const AdminDashboardPage = () => {
                     <p>Owner: {booking.owner?.name || 'Unknown'}</p>
                     <p>Check-in: {formatDate(booking.checkIn)}</p>
                     <p>Check-out: {formatDate(booking.checkOut)}</p>
-                    <p>Total: ₹{booking.totalPrice}</p>
+                    <p className="capitalize">Billing: {booking.billingUnit || 'month'} · {booking.paymentPlan || 'upfront'}</p>
+                    <p>Stay total: ₹{booking.totalPrice}</p>
+                    {booking.amountPaid > 0 && <p>Paid: ₹{booking.amountPaid}</p>}
+                    {booking.paymentStatus === 'partial' && <p>Next installment: ₹{booking.nextPaymentAmount} · Due {formatDate(booking.nextPaymentDueAt)}</p>}
                     <p className="capitalize">Payment: {booking.paymentStatus}</p>
                     <p>Requested: {formatDate(booking.createdAt)}</p>
                   </div>
