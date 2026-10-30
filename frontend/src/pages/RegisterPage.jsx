@@ -34,7 +34,8 @@ const RegisterPage = () => {
 
         <form onSubmit={handleSubmit} className="mt-10 space-y-5">
           <input name="name" value={form.name} onChange={handleChange} required placeholder="Name" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
-          <input name="email" value={form.email} onChange={handleChange} required type="email" placeholder="Email" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
+          <input name="email" value={form.email} onChange={handleChange} required type="email" pattern="[^@]+@gmail[.]com" title="Use an @gmail.com email address." placeholder="name@gmail.com" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
+          <p className="-mt-3 text-sm text-slate-400">Use an @gmail.com email address to register.</p>
           <input name="password" value={form.password} onChange={handleChange} required type="password" placeholder="Password" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           <fieldset>
             <legend className="mb-2 text-sm text-slate-300">Account type</legend>

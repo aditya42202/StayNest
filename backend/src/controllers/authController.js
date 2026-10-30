@@ -14,6 +14,11 @@ export const registerUser = async (req, res) => {
   const { name, email, password, role } = req.body;
   const requestedRole = canonicalRole(role || 'user');
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!/^[^@\s]+@gmail\.com$/.test(normalizedEmail)) {
+    res.status(400);
+    throw new Error('Please use a valid @gmail.com email address');
+  }
+
   if (!['user', 'owner', 'admin'].includes(requestedRole)) {
     res.status(400);
     throw new Error('Please select a valid account type');
