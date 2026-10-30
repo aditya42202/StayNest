@@ -54,6 +54,7 @@ export const searchProperties = async (req, res) => {
 
 export const getFeaturedProperties = async (req, res) => {
   const properties = await Property.find({ available: true })
+    .populate('owner', 'name')
     .sort({ rating: -1, createdAt: -1 })
     .limit(8);
   res.json({ properties });

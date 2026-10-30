@@ -94,6 +94,8 @@ const SearchResultsPage = () => {
                   <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
                     <span>{property.area}, {property.city}</span>
                     <span className="h-1 w-1 rounded-full bg-slate-500" />
+                    <span>Owner: {property.owner?.name || 'Not available'}</span>
+                    <span className="h-1 w-1 rounded-full bg-slate-500" />
                     <span>{property.amenities?.slice(0, 3).join(' • ')}</span>
                   </div>
                 </Link>

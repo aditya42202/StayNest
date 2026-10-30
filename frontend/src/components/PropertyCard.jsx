@@ -8,6 +8,7 @@ const PropertyCard = ({ property }) => {
         <span className="text-sm text-slate-300">₹{property.rent}/month</span>
       </div>
       <h2 className="mt-4 text-2xl font-semibold text-white">{property.title}</h2>
+      <p className="mt-2 text-sm text-slate-400">Owner: {property.owner?.name || 'Not available'}</p>
       <p className="mt-3 text-slate-400 line-clamp-3">{property.description}</p>
       <p className="mt-5 text-sm text-slate-300">{property.area}, {property.city}</p>
     </Link>
