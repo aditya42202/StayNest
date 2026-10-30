@@ -1,5 +1,6 @@
 import Property from '../models/Property.js';
 import Booking from '../models/Booking.js';
+import Review from '../models/Review.js';
 import User from '../models/User.js';
 
 export const getProperties = async (req, res) => {
@@ -61,7 +62,7 @@ export const getFeaturedProperties = async (req, res) => {
 export const getPropertyById = async (req, res) => {
   const property = await Property.findById(req.params.id)
     .populate('owner', 'name email phone')
-    .populate('reviews');
+    .populate({ path: 'reviews', model: Review });
 
   if (!property) {
     res.status(404);

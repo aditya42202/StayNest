@@ -6,25 +6,47 @@ const PropertyDetailsPage = () => {
   const { id } = useParams();
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    let active = true;
     const fetchProperty = async () => {
+      setLoading(true);
+      setProperty(null);
+      setError('');
       try {
         const { data } = await apiClient.get(`/properties/${id}`);
-        setProperty(data);
+        if (active) setProperty(data);
+      } catch (requestError) {
+        if (active) {
+          setError(
+            requestError.response?.status === 404
+              ? 'This property could not be found. It may have been removed.'
+              : requestError.response?.data?.message || 'Unable to load this property. Please try again.'
+          );
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     fetchProperty();
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   if (loading) {
-    return <section className="mx-auto max-w-7xl px-6 py-24 text-white">Loading property details…</section>;
+    return <section className="mx-auto max-w-7xl px-6 pb-24 pt-8 text-white">Loading property details…</section>;
   }
 
   if (!property) {
-    return <section className="mx-auto max-w-7xl px-6 py-24 text-white">Property not found.</section>;
+    return (
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-8 text-white">
+        <div role="alert" className="rounded-3xl border border-white/10 bg-slate-950/80 p-8">
+          <p>{error || 'Property details are unavailable.'}</p>
+        </div>
+      </section>
+    );
   }
 
   const gallery = property.images && property.images.length > 0 ? property.images : [
@@ -34,7 +56,7 @@ const PropertyDetailsPage = () => {
   ];
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-24 text-white">
+    <section className="mx-auto max-w-7xl px-6 pb-24 pt-8 text-white">
       <div className="grid gap-10 lg:grid-cols-[1.5fr_0.9fr]">
         <div className="space-y-8">
           <div className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
