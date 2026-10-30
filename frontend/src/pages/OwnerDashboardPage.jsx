@@ -89,6 +89,7 @@ const OwnerDashboardPage = () => {
   const beginCreate = () => {
     setEditingPropertyId('');
     setPropertyForm(emptyPropertyForm());
+    setActiveTab('properties');
     setShowPropertyForm(true);
     setActionError('');
     setActionMessage('');

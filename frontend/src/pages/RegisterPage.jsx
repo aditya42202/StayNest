@@ -22,6 +22,7 @@ const RegisterPage = () => {
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
+      
     }
   };
 
