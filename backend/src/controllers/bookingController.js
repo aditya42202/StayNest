@@ -3,28 +3,56 @@ import Property from '../models/Property.js';
 import Room from '../models/Room.js';
 
 export const createBooking = async (req, res) => {
-  const { propertyId, roomId, checkIn, checkOut, totalPrice } = req.body;
+  const { propertyId, roomId, checkIn, checkOut } = req.body;
 
   const property = await Property.findById(propertyId);
-  const room = await Room.findById(roomId);
-
-  if (!property || !room || !room.available) {
+  if (!property || !property.available) {
     res.status(400);
-    throw new Error('Selected room or property is unavailable');
+    throw new Error('Selected property is unavailable');
+  }
+  if (property.owner.toString() === req.user._id.toString()) {
+    res.status(400);
+    throw new Error('You cannot book your own property');
   }
 
+  const checkInDate = new Date(checkIn);
+  const checkOutDate = new Date(checkOut);
+  if (
+    !checkIn ||
+    !checkOut ||
+    Number.isNaN(checkInDate.getTime()) ||
+    Number.isNaN(checkOutDate.getTime()) ||
+    checkOutDate <= checkInDate ||
+    checkInDate < new Date(new Date().setUTCHours(0, 0, 0, 0))
+  ) {
+    res.status(400);
+    throw new Error('Choose a valid future check-in date and a check-out date after check-in');
+  }
+
+  let room;
+  if (roomId) {
+    room = await Room.findOne({ _id: roomId, property: property._id, available: true });
+    if (!room) {
+      res.status(400);
+      throw new Error('Selected room is unavailable');
+    }
+  }
+
+  const nights = Math.ceil((checkOutDate - checkInDate) / (24 * 60 * 60 * 1000));
+  const monthlyRate = room?.price || property.rent;
+  const totalPrice = Math.ceil(nights / 30) * monthlyRate;
   const booking = await Booking.create({
-    property: propertyId,
-    room: roomId,
+    property: property._id,
+    room: room?._id,
     student: req.user._id,
     owner: property.owner,
-    checkIn,
-    checkOut,
+    checkIn: checkInDate,
+    checkOut: checkOutDate,
     totalPrice,
     paymentStatus: 'unpaid'
   });
 
-  res.status(201).json(booking);
+  res.status(201).json({ booking, message: 'Booking request sent to the property owner' });
 };
 
 export const getMyBookings = async (req, res) => {

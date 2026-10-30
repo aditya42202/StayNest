@@ -6,3 +6,7 @@ export const getProperty = (id) => apiClient.get(`/properties/${id}`);
 export const createProperty = (data) => apiClient.post('/properties', data);
 export const updateProperty = (id, data) => apiClient.put(`/properties/${id}`, data);
 export const deleteProperty = (id) => apiClient.delete(`/properties/${id}`);
+export const addToWishlist = (id) => apiClient.post(`/properties/${id}/wishlist`);
+export const removeFromWishlist = (id) => apiClient.delete(`/properties/${id}/wishlist`);
+export const getWishlist = () => apiClient.get('/users/wishlist');
+export const createBooking = (data) => apiClient.post('/bookings', data);

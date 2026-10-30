@@ -62,6 +62,7 @@ export const getFeaturedProperties = async (req, res) => {
 export const getPropertyById = async (req, res) => {
   const property = await Property.findById(req.params.id)
     .populate('owner', 'name email phone')
+    .populate('rooms')
     .populate({ path: 'reviews', model: Review });
 
   if (!property) {
