@@ -19,7 +19,7 @@ const DashboardPage = () => {
     return <OwnerDashboardPage />;
   }
 
-  if (user.role === 'student') {
+  if (user.role === 'user' || user.role === 'student') {
     return <StudentDashboardPage />;
   }
 

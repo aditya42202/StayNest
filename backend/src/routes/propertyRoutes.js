@@ -8,7 +8,8 @@ import {
   getFeaturedProperties,
   searchProperties,
   addWishlist,
-  removeWishlist
+  removeWishlist,
+  createReview
 } from '../controllers/propertyController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
@@ -21,7 +22,8 @@ router.get('/:id', getPropertyById);
 router.post('/', protect, authorize('owner', 'admin'), createProperty);
 router.put('/:id', protect, authorize('owner', 'admin'), updateProperty);
 router.delete('/:id', protect, authorize('owner', 'admin'), deleteProperty);
-router.post('/:id/wishlist', protect, addWishlist);
-router.delete('/:id/wishlist', protect, removeWishlist);
+router.post('/:id/wishlist', protect, authorize('user'), addWishlist);
+router.delete('/:id/wishlist', protect, authorize('user'), removeWishlist);
+router.post('/:id/reviews', protect, authorize('user'), createReview);
 
 export default router;

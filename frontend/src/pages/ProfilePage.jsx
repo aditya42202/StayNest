@@ -81,7 +81,7 @@ const ProfilePage = () => {
       name: form.name.trim(),
       phone: form.phone.trim()
     };
-    if (user.role === 'student') {
+    if (user.role === 'user' || user.role === 'student') {
       profile.studentProfile = {
         college: form.college.trim(),
         course: form.course.trim(),
@@ -154,7 +154,7 @@ const ProfilePage = () => {
           </div>
         </section>
 
-        {user.role === 'student' && (
+        {(user.role === 'user' || user.role === 'student') && (
           <section>
             <h2 className="mb-5 text-xl font-semibold">Student details & stay preferences</h2>
             <div className="grid gap-5 sm:grid-cols-2">

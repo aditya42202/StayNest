@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import { normalizeRole } from '../utils/roles.js';
 
 const profileProjection = 'name email role phone avatar preferences studentProfile ownerProfile adminProfile verified createdAt';
 
@@ -8,7 +9,7 @@ export const getProfile = async (req, res) => {
     res.status(404);
     throw new Error('User not found');
   }
-  res.json(user);
+  res.json({ ...user.toObject(), role: normalizeRole(user.role) });
 };
 
 export const updateProfile = async (req, res) => {
@@ -21,7 +22,7 @@ export const updateProfile = async (req, res) => {
   if (typeof req.body.name === 'string') user.name = req.body.name.trim();
   if (typeof req.body.phone === 'string') user.phone = req.body.phone.trim();
 
-  if (req.user.role === 'student') {
+  if (normalizeRole(req.user.role) === 'user') {
     user.studentProfile ??= {};
     user.preferences ??= {};
     const { college, course, yearOfStudy } = req.body.studentProfile || {};
@@ -58,7 +59,7 @@ export const updateProfile = async (req, res) => {
     id: updatedUser._id,
     name: updatedUser.name,
     email: updatedUser.email,
-    role: updatedUser.role,
+    role: normalizeRole(updatedUser.role),
     phone: updatedUser.phone,
     avatar: updatedUser.avatar,
     preferences: updatedUser.preferences,

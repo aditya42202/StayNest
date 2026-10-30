@@ -10,10 +10,10 @@ import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/', protect, authorize('student'), createBooking);
+router.post('/', protect, authorize('user'), createBooking);
 router.get('/me', protect, getMyBookings);
 router.get('/owner', protect, authorize('owner', 'admin'), getOwnerBookings);
 router.get('/:id', protect, getBookingById);
-router.put('/:id/status', protect, authorize('owner', 'admin'), updateBookingStatus);
+router.put('/:id/status', protect, authorize('user', 'owner', 'admin'), updateBookingStatus);
 
 export default router;

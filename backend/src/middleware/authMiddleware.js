@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { normalizeRole } from '../utils/roles.js';
 
 export const protect = async (req, res, next) => {
   let token;
@@ -19,6 +20,11 @@ export const protect = async (req, res, next) => {
       res.status(401);
       throw new Error('Not authorized, token failed');
     }
+    if (req.user.blocked) {
+      res.status(403);
+      throw new Error('Forbidden: account has been blocked');
+    }
+    req.user.role = normalizeRole(req.user.role);
     next();
   } catch (error) {
     res.status(401);
@@ -28,7 +34,9 @@ export const protect = async (req, res, next) => {
 
 export const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const normalizedRoles = roles.map(normalizeRole);
+    const userRole = normalizeRole(req.user?.role);
+    if (!req.user || !normalizedRoles.includes(userRole)) {
       res.status(403);
       throw new Error('Forbidden: insufficient permissions');
     }

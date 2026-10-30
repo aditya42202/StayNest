@@ -11,6 +11,7 @@ import PropertyDetailsPage from './pages/PropertyDetailsPage.jsx';
 import OAuthSuccessPage from './pages/OAuthSuccessPage.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 function App() {
   return (
@@ -24,8 +25,10 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/dashboard/*" element={<DashboardPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/dashboard/*" element={<DashboardPage />} />
+        </Route>
         <Route path="/oauth-success" element={<OAuthSuccessPage />} />
       </Routes>
       <Footer />

@@ -5,13 +5,18 @@ import Booking from '../models/Booking.js';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const createPaymentIntent = async (req, res) => {
-  const { bookingId, amount, currency = 'inr' } = req.body;
+  const { bookingId, currency = 'inr' } = req.body;
 
   const booking = await Booking.findById(bookingId);
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
+  if (booking.student.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error('You can only pay for your own bookings');
+  }
+  const amount = booking.totalPrice;
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.round(amount * 100),

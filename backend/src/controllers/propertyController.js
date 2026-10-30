@@ -177,3 +177,34 @@ export const removeWishlist = async (req, res) => {
   await user.save();
   res.json({ wishlist: user.wishlist });
 };
+
+export const createReview = async (req, res) => {
+  const property = await Property.findById(req.params.id);
+  if (!property) {
+    res.status(404);
+    throw new Error('Property not found');
+  }
+  const rating = Number(req.body.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    res.status(400);
+    throw new Error('Rating must be between 1 and 5');
+  }
+  const existingReview = await Review.findOne({ property: property._id, user: req.user._id });
+  if (existingReview) {
+    res.status(400);
+    throw new Error('You have already reviewed this property');
+  }
+  const review = await Review.create({
+    property: property._id,
+    user: req.user._id,
+    rating,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : ''
+  });
+  property.reviews.push(review._id);
+  await property.save();
+
+  const reviews = await Review.find({ property: property._id });
+  property.rating = reviews.reduce((total, item) => total + item.rating, 0) / reviews.length;
+  await property.save();
+  res.status(201).json(review);
+};

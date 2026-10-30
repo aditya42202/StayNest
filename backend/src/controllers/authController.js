@@ -6,11 +6,17 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
 import generateToken from '../utils/generateToken.js';
 import { sendEmail } from '../utils/sendEmail.js';
+import { canonicalRole, normalizeRole } from '../utils/roles.js';
 
 const saltRounds = 10;
 
 export const registerUser = async (req, res) => {
   const { name, email, password, role } = req.body;
+  const requestedRole = canonicalRole(role || 'user');
+  if (!['user', 'owner'].includes(requestedRole)) {
+    res.status(403);
+    throw new Error('Administrator accounts must be created by an existing administrator');
+  }
 
   const existingUser = await User.findOne({ email });
   if (existingUser) {
@@ -19,7 +25,7 @@ export const registerUser = async (req, res) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, saltRounds);
-  const user = await User.create({ name, email, password: hashedPassword, role });
+  const user = await User.create({ name, email, password: hashedPassword, role: requestedRole });
 
   const token = generateToken(user);
   if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
@@ -37,7 +43,7 @@ export const registerUser = async (req, res) => {
   }
 
   res.status(201).json({
-    user: { id: user._id, name: user.name, email: user.email, role: user.role },
+    user: { id: user._id, name: user.name, email: user.email, role: normalizeRole(user.role) },
     token
   });
 };
@@ -47,9 +53,13 @@ export const loginUser = async (req, res) => {
   const user = await User.findOne({ email });
 
   if (user && (await bcrypt.compare(password, user.password))) {
+    if (user.blocked) {
+      res.status(403);
+      throw new Error('This account has been blocked');
+    }
     const token = generateToken(user);
     return res.json({
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, verified: user.verified },
+      user: { id: user._id, name: user.name, email: user.email, role: normalizeRole(user.role), verified: user.verified },
       token
     });
   }
@@ -176,7 +186,7 @@ if (googleClientID && googleClientSecret) {
           email: profile.emails[0].value,
           googleId: profile.id,
           verified: true,
-          role: 'student'
+          role: 'user'
         });
         done(null, user);
       }

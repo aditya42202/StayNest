@@ -33,6 +33,28 @@ const PropertyDetailsPage = () => {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingMessage, setBookingMessage] = useState('');
   const [bookingError, setBookingError] = useState('');
+  const [reviewRating, setReviewRating] = useState('5');
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewMessage, setReviewMessage] = useState('');
+
+  const submitReview = async (event) => {
+    event.preventDefault();
+    setReviewMessage('');
+    try {
+      const { data } = await apiClient.post(`/properties/${id}/reviews`, {
+        rating: Number(reviewRating),
+        comment: reviewComment
+      });
+      setProperty((current) => ({
+        ...current,
+        reviews: [...(current.reviews || []), data]
+      }));
+      setReviewComment('');
+      setReviewMessage('Review submitted successfully.');
+    } catch (requestError) {
+      setReviewMessage(requestError.response?.data?.message || 'Unable to submit your review.');
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -118,8 +140,8 @@ const PropertyDetailsPage = () => {
       navigate('/login');
       return;
     }
-    if (user.role !== 'student') {
-      setBookingError('Only student accounts can book a property.');
+    if (user.role !== 'user' && user.role !== 'student') {
+      setBookingError('Only tenant accounts can book a property.');
       return;
     }
     setBookingOpen((open) => !open);
@@ -191,7 +213,9 @@ const PropertyDetailsPage = () => {
                 <h1 className="text-4xl font-semibold">{property.title}</h1>
                 <p className="mt-2 text-slate-400">{property.area}, {property.city}, {property.college || 'Nearby College'}</p>
               </div>
-              <div className="rounded-3xl bg-slate-900 px-5 py-3 text-sm text-slate-200">4.5 ★ (120 Reviews)</div>
+              <div className="rounded-3xl bg-slate-900 px-5 py-3 text-sm text-slate-200">
+                {property.rating ? Number(property.rating).toFixed(1) : 'New'} ★ ({property.reviews?.length || 0} Reviews)
+              </div>
             </div>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -316,6 +340,20 @@ const PropertyDetailsPage = () => {
               </form>
             )}
           </div>
+          {(user?.role === 'user' || user?.role === 'student') && (
+            <form onSubmit={submitReview} className="rounded-[32px] bg-slate-900/90 p-8 shadow-glass">
+              <h2 className="text-2xl font-semibold">Write a review</h2>
+              <label className="mt-5 block text-sm text-slate-300">
+                Rating
+                <select value={reviewRating} onChange={(event) => setReviewRating(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white">
+                  {[5, 4, 3, 2, 1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}
+                </select>
+              </label>
+              <textarea value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} maxLength={1000} placeholder="Share your experience" className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white" />
+              {reviewMessage && <p className="mt-3 text-sm text-blue-200">{reviewMessage}</p>}
+              <button type="submit" className="mt-4 rounded-2xl bg-blue-500 px-5 py-3 text-sm font-semibold">Submit review</button>
+            </form>
+          )}
         </aside>
       </div>
     </section>

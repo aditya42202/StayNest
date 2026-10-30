@@ -8,6 +8,17 @@ const StudentDashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const cancelBooking = async (bookingId) => {
+    try {
+      const { data } = await apiClient.put(`/bookings/${bookingId}/status`, { status: 'cancelled' });
+      setBookings((current) => current.map((booking) => (
+        booking._id === bookingId ? { ...booking, ...data } : booking
+      )));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to cancel the booking.');
+    }
+  };
+
   useEffect(() => {
     const fetchBookings = async () => {
       try {
@@ -78,6 +89,15 @@ const StudentDashboardPage = () => {
                 <p>Total: ₹{booking.totalPrice}</p>
                 <p className="capitalize">Payment: {booking.paymentStatus}</p>
               </div>
+              {booking.status === 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => cancelBooking(booking._id)}
+                  className="mt-5 rounded-2xl border border-rose-400/40 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/10"
+                >
+                  Cancel booking
+                </button>
+              )}
             </article>
           ))}
         </div>

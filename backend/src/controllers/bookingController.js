@@ -103,9 +103,37 @@ export const updateBookingStatus = async (req, res) => {
     throw new Error('Booking not found');
   }
 
-  booking.status = req.body.status || booking.status;
-  if (booking.status === 'approved') booking.paymentStatus = 'paid';
-  if (booking.status === 'cancelled') booking.paymentStatus = 'refunded';
+  const requestedStatus = req.body.status;
+  const role = req.user.role === 'student' ? 'user' : req.user.role;
+  const isTenant = booking.student.toString() === req.user._id.toString();
+  const isOwner = booking.owner.toString() === req.user._id.toString();
+
+  if (role === 'user') {
+    if (!isTenant || requestedStatus !== 'cancelled') {
+      res.status(403);
+      throw new Error('Tenants can only cancel their own bookings');
+    }
+    if (booking.status !== 'pending') {
+      res.status(400);
+      throw new Error('Only pending booking requests can be cancelled');
+    }
+  } else if (role === 'owner') {
+    if (!isOwner || !['approved', 'rejected'].includes(requestedStatus)) {
+      res.status(403);
+      throw new Error('Owners can only approve or reject their own booking requests');
+    }
+    if (booking.status !== 'pending') {
+      res.status(400);
+      throw new Error('Only pending booking requests can be reviewed');
+    }
+  } else if (role !== 'admin') {
+    res.status(403);
+    throw new Error('Forbidden: insufficient permissions');
+  }
+
+  booking.status = requestedStatus || booking.status;
+  if (booking.status === 'approved' && booking.paymentStatus !== 'paid') booking.paymentStatus = 'paid';
+  if (booking.status === 'cancelled' && booking.paymentStatus !== 'unpaid') booking.paymentStatus = 'refunded';
   await booking.save();
 
   res.json(booking);
