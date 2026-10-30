@@ -5,6 +5,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import PropertyDetailsPage from './pages/PropertyDetailsPage.jsx';
 import OAuthSuccessPage from './pages/OAuthSuccessPage.jsx';
@@ -23,6 +24,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/dashboard/*" element={<DashboardPage />} />
         <Route path="/oauth-success" element={<OAuthSuccessPage />} />
       </Routes>

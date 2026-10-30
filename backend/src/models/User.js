@@ -17,6 +17,20 @@ const userSchema = new mongoose.Schema({
     city: { type: String },
     categories: [{ type: String }]
   },
+  studentProfile: {
+    college: { type: String, trim: true, maxlength: 120 },
+    course: { type: String, trim: true, maxlength: 120 },
+    yearOfStudy: { type: Number, min: 1, max: 10 }
+  },
+  ownerProfile: {
+    businessName: { type: String, trim: true, maxlength: 120 },
+    businessAddress: { type: String, trim: true, maxlength: 300 },
+    website: { type: String, trim: true, maxlength: 200 }
+  },
+  adminProfile: {
+    department: { type: String, trim: true, maxlength: 120 },
+    designation: { type: String, trim: true, maxlength: 120 }
+  },
   wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Property' }],
   properties: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Property' }],
   createdAt: { type: Date, default: Date.now }
