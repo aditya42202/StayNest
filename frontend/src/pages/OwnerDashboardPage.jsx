@@ -35,6 +35,18 @@ const emptyPropertyForm = () => ({
 });
 
 const dateLabel = (value) => (value ? new Date(value).toLocaleDateString() : 'Not specified');
+const dateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const nextDateInputValue = (value) => {
+  if (!value) return dateInputValue(new Date());
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + 1);
+  return dateInputValue(date);
+};
 
 const OwnerDashboardPage = () => {
   const [dashboard, setDashboard] = useState(null);
@@ -47,6 +59,8 @@ const OwnerDashboardPage = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [busyBookingId, setBusyBookingId] = useState('');
+  const [reviewingBookingId, setReviewingBookingId] = useState('');
+  const [reviewDates, setReviewDates] = useState({ checkIn: '', checkOut: '' });
   const [busyPropertyId, setBusyPropertyId] = useState('');
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState('');
@@ -199,14 +213,30 @@ const OwnerDashboardPage = () => {
     }
   };
 
+  const beginBookingApproval = (booking) => {
+    setReviewingBookingId(booking._id);
+    setReviewDates({ checkIn: '', checkOut: '' });
+    setActionError('');
+    setActionMessage('');
+  };
+
   const handleBookingReview = async (booking, status) => {
+    if (status === 'approved' && (!reviewDates.checkIn || !reviewDates.checkOut || reviewDates.checkOut <= reviewDates.checkIn)) {
+      setActionError('Choose a check-in date and a check-out date after check-in.');
+      return;
+    }
     setBusyBookingId(booking._id);
     setActionError('');
     setActionMessage('');
     try {
-      await verifyBookingRequest(booking._id, status);
+      const dates = status === 'approved' ? reviewDates : {};
+      const { data } = await verifyBookingRequest(booking._id, status, dates);
       setRequests((current) => current.filter((request) => request._id !== booking._id));
-      setBookings((current) => current.map((item) => item._id === booking._id ? { ...item, status } : item));
+      setBookings((current) => current.map((item) => item._id === booking._id
+        ? { ...item, status: data.status, checkIn: data.checkIn, checkOut: data.checkOut, totalPrice: data.totalPrice }
+        : item));
+      setReviewingBookingId('');
+      setReviewDates({ checkIn: '', checkOut: '' });
       setActionMessage(`Booking request ${status}.`);
     } catch (requestError) {
       setActionError(requestError.response?.data?.message || 'Unable to update this booking request.');
@@ -327,9 +357,9 @@ const OwnerDashboardPage = () => {
                 <article key={booking._id} className="rounded-3xl border border-white/10 bg-slate-950/80 p-5">
                   <p className="font-semibold">{booking.student?.name || 'Student'}</p>
                   <p className="mt-1 text-sm text-slate-300">{booking.property?.title || 'Property'}</p>
-                  <p className="mt-1 text-sm text-slate-400">Check-in: {dateLabel(booking.checkIn)}</p>
+                  <p className="mt-1 text-sm text-slate-400">Move-in dates will be set during review.</p>
                   <div className="mt-4 flex gap-3">
-                    <button type="button" disabled={busyBookingId === booking._id} onClick={() => handleBookingReview(booking, 'approved')} className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50">Approve</button>
+                    <button type="button" disabled={busyBookingId === booking._id} onClick={() => { setActiveTab('bookings'); beginBookingApproval(booking); }} className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50">Set dates and review</button>
                     <button type="button" disabled={busyBookingId === booking._id} onClick={() => handleBookingReview(booking, 'rejected')} className="rounded-full bg-rose-500/15 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/25 disabled:opacity-50">Reject</button>
                   </div>
                 </article>
@@ -455,7 +485,47 @@ const OwnerDashboardPage = () => {
               </div>
               {booking.status === 'pending' && (
                 <div className="mt-5 flex gap-3">
-                  <button type="button" disabled={busyBookingId === booking._id} onClick={() => handleBookingReview(booking, 'approved')} className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50">Approve request</button>
+                  {reviewingBookingId === booking._id ? (
+                    <div className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-5">
+                      <p className="text-sm text-slate-300">Choose move-in and move-out dates before approving this request.</p>
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <label className="text-sm text-slate-300">Check-in
+                          <input
+                            type="date"
+                            min={dateInputValue(new Date())}
+                            value={reviewDates.checkIn}
+                            onChange={(event) => setReviewDates((current) => ({
+                              checkIn: event.target.value,
+                              checkOut: current.checkOut && current.checkOut > event.target.value ? current.checkOut : ''
+                            }))}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white"
+                          />
+                        </label>
+                        <label className="text-sm text-slate-300">Check-out
+                          <input
+                            type="date"
+                            min={nextDateInputValue(reviewDates.checkIn)}
+                            value={reviewDates.checkOut}
+                            onChange={(event) => setReviewDates((current) => ({ ...current, checkOut: event.target.value }))}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          disabled={busyBookingId === booking._id || !reviewDates.checkIn || !reviewDates.checkOut || reviewDates.checkOut <= reviewDates.checkIn}
+                          onClick={() => handleBookingReview(booking, 'approved')}
+                          className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                        >
+                          {busyBookingId === booking._id ? 'Approving...' : 'Confirm dates and approve'}
+                        </button>
+                        <button type="button" onClick={() => setReviewingBookingId('')} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300 hover:text-white">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" disabled={busyBookingId === booking._id} onClick={() => beginBookingApproval(booking)} className="rounded-full bg-emerald-500/15 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50">Set dates and approve</button>
+                  )}
                   <button type="button" disabled={busyBookingId === booking._id} onClick={() => handleBookingReview(booking, 'rejected')} className="rounded-full bg-rose-500/15 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/25 disabled:opacity-50">Reject request</button>
                 </div>
               )}

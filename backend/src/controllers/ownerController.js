@@ -1,5 +1,6 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
+import Room from '../models/Room.js';
 
 export const getOwnerDashboard = async (req, res) => {
   const propertyCount = await Property.countDocuments({ owner: req.user._id });
@@ -34,7 +35,7 @@ export const getOwnerBookings = async (req, res) => {
 };
 
 export const verifyBookingRequest = async (req, res) => {
-  const { status } = req.body;
+  const { status, checkIn, checkOut } = req.body;
   if (!['approved', 'rejected'].includes(status)) {
     res.status(400);
     throw new Error('Booking status must be approved or rejected');
@@ -48,6 +49,35 @@ export const verifyBookingRequest = async (req, res) => {
   if (booking.status !== 'pending') {
     res.status(400);
     throw new Error('Only pending booking requests can be reviewed');
+  }
+
+  if (status === 'approved') {
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+    if (
+      !checkIn ||
+      !checkOut ||
+      Number.isNaN(checkInDate.getTime()) ||
+      Number.isNaN(checkOutDate.getTime()) ||
+      checkOutDate <= checkInDate ||
+      checkInDate < new Date(new Date().setUTCHours(0, 0, 0, 0))
+    ) {
+      res.status(400);
+      throw new Error('Choose a valid future check-in date and a check-out date after check-in');
+    }
+
+    const property = await Property.findById(booking.property);
+    if (!property) {
+      res.status(404);
+      throw new Error('Property not found for this booking');
+    }
+    const room = booking.room
+      ? await Room.findOne({ _id: booking.room, property: property._id })
+      : null;
+    const nights = Math.ceil((checkOutDate - checkInDate) / (24 * 60 * 60 * 1000));
+    booking.checkIn = checkInDate;
+    booking.checkOut = checkOutDate;
+    booking.totalPrice = Math.ceil(nights / 30) * (room?.price || property.rent);
   }
 
   booking.status = status;

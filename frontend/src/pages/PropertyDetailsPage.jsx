@@ -4,20 +4,6 @@ import { useSelector } from 'react-redux';
 import apiClient from '../api/apiClient.js';
 import { addToWishlist, createBooking, getWishlist, removeFromWishlist } from '../api/propertyApi.js';
 
-const getDateInputValue = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const getNextDateInputValue = (dateValue) => {
-  if (!dateValue) return getDateInputValue(new Date());
-  const date = new Date(`${dateValue}T00:00:00`);
-  date.setDate(date.getDate() + 1);
-  return getDateInputValue(date);
-};
-
 const PropertyDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -156,9 +142,7 @@ const PropertyDetailsPage = () => {
     try {
       const { data } = await createBooking({
         propertyId: id,
-        roomId: bookingDates.roomId || undefined,
-        checkIn: bookingDates.checkIn,
-        checkOut: bookingDates.checkOut
+        roomId: bookingDates.roomId || undefined
       });
       setBookingMessage(data.message || 'Booking request sent to the property owner.');
       setBookingOpen(false);
@@ -291,28 +275,6 @@ const PropertyDetailsPage = () => {
             {bookingError && <p role="alert" className="mt-3 text-sm text-rose-100">{bookingError}</p>}
             {bookingOpen && (
               <form onSubmit={handleBookingSubmit} className="mt-5 space-y-4 rounded-3xl bg-slate-950/30 p-5">
-                <label className="block text-sm text-white">
-                  Check-in date
-                  <input
-                    type="date"
-                    required
-                    min={getDateInputValue(new Date())}
-                    value={bookingDates.checkIn}
-                    onChange={(event) => setBookingDates((current) => ({ ...current, checkIn: event.target.value }))}
-                    className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
-                  />
-                </label>
-                <label className="block text-sm text-white">
-                  Check-out date
-                  <input
-                    type="date"
-                    required
-                    min={getNextDateInputValue(bookingDates.checkIn)}
-                    value={bookingDates.checkOut}
-                    onChange={(event) => setBookingDates((current) => ({ ...current, checkOut: event.target.value }))}
-                    className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
-                  />
-                </label>
                 {property.rooms?.some((room) => room.available) && (
                   <label className="block text-sm text-white">
                     Room
@@ -328,11 +290,7 @@ const PropertyDetailsPage = () => {
                     </select>
                   </label>
                 )}
-                {bookingDates.checkIn && bookingDates.checkOut && bookingDates.checkOut > bookingDates.checkIn && (
-                  <p className="text-sm text-white">
-                    Estimated total: ₹{Math.ceil((new Date(`${bookingDates.checkOut}T00:00:00`) - new Date(`${bookingDates.checkIn}T00:00:00`)) / (30 * 24 * 60 * 60 * 1000)) * (property.rooms?.find((room) => room._id === bookingDates.roomId)?.price || property.rent)}
-                  </p>
-                )}
+                <p className="text-sm text-white">Estimated first month: ₹{property.rooms?.find((room) => room._id === bookingDates.roomId)?.price || property.rent}. The owner will confirm your dates when reviewing the request.</p>
                 <button type="submit" disabled={bookingLoading} className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-blue-700 disabled:cursor-wait disabled:opacity-60">
                   {bookingLoading ? 'Sending request...' : 'Send booking request'}
                 </button>

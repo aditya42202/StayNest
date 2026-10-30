@@ -3,7 +3,7 @@ import Property from '../models/Property.js';
 import Room from '../models/Room.js';
 
 export const createBooking = async (req, res) => {
-  const { propertyId, roomId, checkIn, checkOut } = req.body;
+  const { propertyId, roomId } = req.body;
 
   const property = await Property.findById(propertyId);
   if (!property || !property.available) {
@@ -15,20 +15,6 @@ export const createBooking = async (req, res) => {
     throw new Error('You cannot book your own property');
   }
 
-  const checkInDate = new Date(checkIn);
-  const checkOutDate = new Date(checkOut);
-  if (
-    !checkIn ||
-    !checkOut ||
-    Number.isNaN(checkInDate.getTime()) ||
-    Number.isNaN(checkOutDate.getTime()) ||
-    checkOutDate <= checkInDate ||
-    checkInDate < new Date(new Date().setUTCHours(0, 0, 0, 0))
-  ) {
-    res.status(400);
-    throw new Error('Choose a valid future check-in date and a check-out date after check-in');
-  }
-
   let room;
   if (roomId) {
     room = await Room.findOne({ _id: roomId, property: property._id, available: true });
@@ -38,17 +24,13 @@ export const createBooking = async (req, res) => {
     }
   }
 
-  const nights = Math.ceil((checkOutDate - checkInDate) / (24 * 60 * 60 * 1000));
   const monthlyRate = room?.price || property.rent;
-  const totalPrice = Math.ceil(nights / 30) * monthlyRate;
   const booking = await Booking.create({
     property: property._id,
     room: room?._id,
     student: req.user._id,
     owner: property.owner,
-    checkIn: checkInDate,
-    checkOut: checkOutDate,
-    totalPrice,
+    totalPrice: monthlyRate,
     paymentStatus: 'unpaid'
   });
 
@@ -126,9 +108,18 @@ export const updateBookingStatus = async (req, res) => {
       res.status(400);
       throw new Error('Only pending booking requests can be reviewed');
     }
+    if (requestedStatus === 'approved' && (!booking.checkIn || !booking.checkOut)) {
+      res.status(400);
+      throw new Error('Set check-in and check-out dates before approving this request');
+    }
   } else if (role !== 'admin') {
     res.status(403);
     throw new Error('Forbidden: insufficient permissions');
+  }
+
+  if (requestedStatus === 'approved' && (!booking.checkIn || !booking.checkOut)) {
+    res.status(400);
+    throw new Error('Set check-in and check-out dates before approving this request');
   }
 
   booking.status = requestedStatus || booking.status;

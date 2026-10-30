@@ -84,8 +84,6 @@ const StudentDashboardPage = () => {
               </div>
               <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-3">
                 <p>Room: {booking.room?.name || 'Not specified'}</p>
-                <p>Check-in: {booking.checkIn ? new Date(booking.checkIn).toLocaleDateString() : 'Not specified'}</p>
-                <p>Check-out: {booking.checkOut ? new Date(booking.checkOut).toLocaleDateString() : 'Not specified'}</p>
                 <p>Total: ₹{booking.totalPrice}</p>
                 <p className="capitalize">Payment: {booking.paymentStatus}</p>
               </div>
