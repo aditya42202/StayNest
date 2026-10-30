@@ -1,7 +1,9 @@
 import { createSlice } from '@reduxjs/toolkit';
 
-const persistedUser = window.localStorage.getItem('staynest_user');
-const persistedToken = window.localStorage.getItem('staynest_token');
+const persistedUser = window.sessionStorage.getItem('staynest_user');
+const persistedToken = window.sessionStorage.getItem('staynest_token');
+window.localStorage.removeItem('staynest_user');
+window.localStorage.removeItem('staynest_token');
 
 const initialState = {
   user: persistedUser ? JSON.parse(persistedUser) : null,
@@ -22,8 +24,8 @@ const authSlice = createSlice({
       state.loading = false;
       state.user = action.payload.user;
       state.token = action.payload.token;
-      window.localStorage.setItem('staynest_user', JSON.stringify(action.payload.user));
-      window.localStorage.setItem('staynest_token', action.payload.token);
+      window.sessionStorage.setItem('staynest_user', JSON.stringify(action.payload.user));
+      window.sessionStorage.setItem('staynest_token', action.payload.token);
     },
     loginFailure(state, action) {
       state.loading = false;
@@ -31,13 +33,13 @@ const authSlice = createSlice({
     },
     authUserUpdated(state, action) {
       state.user = { ...state.user, ...action.payload };
-      window.localStorage.setItem('staynest_user', JSON.stringify(state.user));
+      window.sessionStorage.setItem('staynest_user', JSON.stringify(state.user));
     },
     logout(state) {
       state.user = null;
       state.token = null;
-      window.localStorage.removeItem('staynest_user');
-      window.localStorage.removeItem('staynest_token');
+      window.sessionStorage.removeItem('staynest_user');
+      window.sessionStorage.removeItem('staynest_token');
     }
   }
 });

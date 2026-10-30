@@ -8,7 +8,7 @@ const OAuthSuccessPage = () => {
   useEffect(() => {
     const token = searchParams.get('token');
     if (token) {
-      window.localStorage.setItem('staynest_token', token);
+      window.sessionStorage.setItem('staynest_token', token);
       navigate('/dashboard', { replace: true });
     } else {
       navigate('/login', { replace: true });

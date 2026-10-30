@@ -6,7 +6,7 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = window.localStorage.getItem('staynest_token');
+  const token = window.sessionStorage.getItem('staynest_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
