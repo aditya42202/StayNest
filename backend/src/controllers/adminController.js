@@ -21,6 +21,16 @@ export const getAllProperties = async (req, res) => {
   res.json({ properties });
 };
 
+export const getAllBookings = async (req, res) => {
+  const bookings = await Booking.find()
+    .populate('student', 'name email')
+    .populate('owner', 'name email')
+    .populate('property', 'title city area')
+    .populate('room', 'name type')
+    .sort({ createdAt: -1 });
+  res.json({ bookings });
+};
+
 export const updatePropertyVerification = async (req, res) => {
   const property = await Property.findById(req.params.id);
   if (!property) {
