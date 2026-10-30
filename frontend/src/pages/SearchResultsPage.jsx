@@ -84,20 +84,21 @@ const SearchResultsPage = () => {
               <div className="rounded-[32px] bg-slate-900/80 p-16 text-center text-slate-400">No properties found for these filters.</div>
             ) : (
               properties.map((property) => (
-              <Link key={property._id} to={`/property/${property._id}`} className="group block overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/80 p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-200">{property.category}</span>
-                  <span className="text-sm font-semibold text-white">₹{property.rent}/month</span>
-                </div>
-                <h2 className="mt-4 text-2xl font-semibold text-white">{property.title}</h2>
-                <p className="mt-3 max-w-2xl text-slate-400">{property.description || 'Comfortable stay with all essential amenities and nearby conveniences.'}</p>
-                <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                  <span>{property.area}, {property.city}</span>
-                  <span className="h-1 w-1 rounded-full bg-slate-500" />
-                  <span>{property.amenities?.slice(0, 3).join(' • ')}</span>
-                </div>
-              </Link>
-            ))}
+                <Link key={property._id} to={`/property/${property._id}`} className="group block overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/80 p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-200">{property.category}</span>
+                    <span className="text-sm font-semibold text-white">₹{property.rent}/month</span>
+                  </div>
+                  <h2 className="mt-4 text-2xl font-semibold text-white">{property.title}</h2>
+                  <p className="mt-3 max-w-2xl text-slate-400">{property.description || 'Comfortable stay with all essential amenities and nearby conveniences.'}</p>
+                  <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                    <span>{property.area}, {property.city}</span>
+                    <span className="h-1 w-1 rounded-full bg-slate-500" />
+                    <span>{property.amenities?.slice(0, 3).join(' • ')}</span>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
 
           <aside className="space-y-6 rounded-[32px] border border-white/10 bg-slate-950/80 p-6 shadow-glass">
