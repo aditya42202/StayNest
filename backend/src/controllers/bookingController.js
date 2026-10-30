@@ -123,7 +123,6 @@ export const updateBookingStatus = async (req, res) => {
   }
 
   booking.status = requestedStatus || booking.status;
-  if (booking.status === 'approved' && booking.paymentStatus !== 'paid') booking.paymentStatus = 'paid';
   if (booking.status === 'cancelled' && booking.paymentStatus !== 'unpaid') booking.paymentStatus = 'refunded';
   await booking.save();
 

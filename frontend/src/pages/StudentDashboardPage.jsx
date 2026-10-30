@@ -1,12 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import apiClient from '../api/apiClient.js';
 import Loader from '../components/Loader.jsx';
 
 const StudentDashboardPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paymentNotice, setPaymentNotice] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [payingBookingId, setPayingBookingId] = useState('');
+
+  const startRentPayment = async (booking) => {
+    setPayingBookingId(booking._id);
+    setPaymentError('');
+    setPaymentNotice('');
+    try {
+      const { data } = await apiClient.post('/payments/checkout', { bookingId: booking._id });
+      if (!data.url) throw new Error('Stripe checkout URL was not returned');
+      window.location.assign(data.url);
+    } catch (requestError) {
+      setPaymentError(requestError.response?.data?.message || 'Unable to start rent payment. Please try again.');
+      setPayingBookingId('');
+    }
+  };
 
   const cancelBooking = async (bookingId) => {
     try {
@@ -34,6 +52,40 @@ const StudentDashboardPage = () => {
     fetchBookings();
   }, []);
 
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    const paymentResult = searchParams.get('payment');
+    if (paymentResult === 'cancelled') {
+      setPaymentNotice('Payment was cancelled. Your booking is still unpaid.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (!sessionId) return;
+
+    let active = true;
+    const confirmPayment = async () => {
+      setPaymentError('');
+      try {
+        const { data } = await apiClient.post(`/payments/checkout/${encodeURIComponent(sessionId)}/confirm`);
+        if (!active) return;
+        if (data.paymentStatus === 'paid') {
+          setBookings((current) => current.map((booking) => (
+            booking._id === data.bookingId ? { ...booking, paymentStatus: 'paid' } : booking
+          )));
+          setPaymentNotice('Rent payment confirmed.');
+        } else {
+          setPaymentNotice('Payment is being confirmed. Refresh your bookings shortly.');
+        }
+      } catch (requestError) {
+        if (active) setPaymentError(requestError.response?.data?.message || 'Unable to confirm payment status. Please refresh your bookings.');
+      } finally {
+        if (active) setSearchParams({}, { replace: true });
+      }
+    };
+    confirmPayment();
+    return () => { active = false; };
+  }, [searchParams, setSearchParams]);
+
   if (loading) {
     return (
       <section className="mx-auto max-w-7xl px-6 pb-24 pt-4">
@@ -49,6 +101,9 @@ const StudentDashboardPage = () => {
         <h1 className="mt-2 text-4xl font-semibold">Your bookings</h1>
         <p className="mt-3 text-slate-300">Track your booking requests and stay details.</p>
       </div>
+
+      {paymentNotice && <p role="status" className="mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-emerald-200">{paymentNotice}</p>}
+      {paymentError && <p role="alert" className="mt-6 rounded-2xl border border-rose-400/30 bg-rose-500/10 p-4 text-rose-200">{paymentError}</p>}
 
       {error ? (
         <div role="alert" className="mt-8 rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-rose-200">
@@ -87,6 +142,17 @@ const StudentDashboardPage = () => {
                 <p>Total: ₹{booking.totalPrice}</p>
                 <p className="capitalize">Payment: {booking.paymentStatus}</p>
               </div>
+              {booking.status === 'pending' && <p className="mt-4 text-sm text-slate-400">Payment is available after the owner approves your booking.</p>}
+              {booking.status === 'approved' && booking.paymentStatus !== 'paid' && (
+                <button
+                  type="button"
+                  disabled={payingBookingId === booking._id}
+                  onClick={() => startRentPayment(booking)}
+                  className="mt-5 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-50"
+                >
+                  {payingBookingId === booking._id ? 'Opening secure checkout...' : `Pay rent · ₹${booking.totalPrice}`}
+                </button>
+              )}
               {booking.status === 'pending' && (
                 <button
                   type="button"

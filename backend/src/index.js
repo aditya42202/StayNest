@@ -17,6 +17,7 @@ import mediaRoutes from './routes/mediaRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
+import { handleStripeWebhook } from './controllers/paymentController.js';
 
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
@@ -53,6 +54,8 @@ app.use(
     credentials: true
   })
 );
+
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));

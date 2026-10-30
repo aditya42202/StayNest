@@ -2,10 +2,43 @@ import Stripe from 'stripe';
 import Payment from '../models/Payment.js';
 import Booking from '../models/Booking.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const getStripeClient = (res) => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    res.status(503);
+    throw new Error('Online payments are not configured');
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY);
+};
 
-export const createPaymentIntent = async (req, res) => {
-  const { bookingId, currency = 'inr' } = req.body;
+const getClientUrl = () => (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')[0]
+  .trim()
+  .replace(/\/+$/, '');
+
+const completeCheckoutPayment = async (session) => {
+  if (session.payment_status !== 'paid') return null;
+
+  const { bookingId, userId } = session.metadata || {};
+  if (!bookingId || !userId) return null;
+
+  const payment = await Payment.findOne({ booking: bookingId, user: userId, transactionId: session.id });
+  if (!payment) return null;
+
+  payment.status = 'completed';
+  await payment.save();
+
+  const booking = await Booking.findOne({ _id: bookingId, student: userId });
+  if (booking && booking.paymentStatus !== 'paid') {
+    booking.paymentStatus = 'paid';
+    await booking.save();
+  }
+
+  return { payment, bookingId };
+};
+
+export const createCheckoutSession = async (req, res) => {
+  const stripe = getStripeClient(res);
+  const { bookingId } = req.body;
 
   const booking = await Booking.findById(bookingId);
   if (!booking) {
@@ -16,12 +49,56 @@ export const createPaymentIntent = async (req, res) => {
     res.status(403);
     throw new Error('You can only pay for your own bookings');
   }
+  if (booking.status !== 'approved') {
+    res.status(400);
+    throw new Error('Payment is available after the owner approves your booking');
+  }
+  if (booking.paymentStatus === 'paid') {
+    res.status(400);
+    throw new Error('This booking has already been paid');
+  }
   const amount = booking.totalPrice;
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amount * 100),
-    currency,
-    metadata: { bookingId: booking._id.toString(), userId: req.user._id.toString() }
+  const existingPayment = await Payment.findOne({
+    booking: booking._id,
+    user: req.user._id,
+    method: 'stripe',
+    status: 'pending',
+    transactionId: { $regex: /^cs_/ }
+  });
+  if (existingPayment) {
+    try {
+      const existingSession = await stripe.checkout.sessions.retrieve(existingPayment.transactionId);
+      if (existingSession.status === 'open' && existingSession.url) {
+        return res.json({ url: existingSession.url, sessionId: existingSession.id });
+      }
+      if (existingSession.payment_status === 'paid') {
+        await completeCheckoutPayment(existingSession);
+        return res.status(409).json({ message: 'This booking has already been paid' });
+      }
+    } catch (sessionError) {
+      console.warn('Pending checkout session could not be reused:', sessionError.message);
+    }
+    existingPayment.status = 'failed';
+    await existingPayment.save();
+  }
+
+  const clientUrl = getClientUrl();
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    customer_email: req.user.email,
+    line_items: [{
+      price_data: {
+        currency: 'inr',
+        product_data: { name: 'StayNest rent payment' },
+        unit_amount: Math.round(amount * 100)
+      },
+      quantity: 1
+    }],
+    metadata: { bookingId: booking._id.toString(), userId: req.user._id.toString() },
+    success_url: `${clientUrl}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${clientUrl}/dashboard?payment=cancelled`
   });
 
   const payment = await Payment.create({
@@ -30,10 +107,50 @@ export const createPaymentIntent = async (req, res) => {
     amount,
     method: 'stripe',
     status: 'pending',
-    transactionId: paymentIntent.id
+    transactionId: session.id
   });
 
-  res.json({ clientSecret: paymentIntent.client_secret, paymentId: payment._id });
+  res.json({ url: session.url, sessionId: session.id, paymentId: payment._id });
+};
+
+export const confirmCheckoutSession = async (req, res) => {
+  const stripe = getStripeClient(res);
+  const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+  if (session.metadata?.userId !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error('You can only confirm your own payment');
+  }
+
+  const result = await completeCheckoutPayment(session);
+  res.json({
+    bookingId: result?.bookingId || session.metadata?.bookingId,
+    paymentStatus: result ? 'paid' : 'pending'
+  });
+};
+
+export const handleStripeWebhook = async (req, res) => {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return res.status(503).json({ message: 'Stripe webhook is not configured' });
+  }
+
+  let event;
+  try {
+    event = getStripeClient(res).webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret);
+  } catch (error) {
+    return res.status(400).send(`Webhook signature verification failed: ${error.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+    await completeCheckoutPayment(event.data.object);
+  } else if (event.type === 'checkout.session.expired') {
+    await Payment.findOneAndUpdate(
+      { transactionId: event.data.object.id, status: 'pending' },
+      { $set: { status: 'failed' } }
+    );
+  }
+
+  res.json({ received: true });
 };
 
 export const getPaymentHistory = async (req, res) => {

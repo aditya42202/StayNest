@@ -33,7 +33,9 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 1. Create a Render Web Service in your Render account.
 2. Use `render.yaml` to configure the backend service.
 3. Add the same environment variables shown in `render.yaml` using Render secrets or env vars:
-   - `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `ADMIN_SIGNUP_EMAILS`
+   - `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `ADMIN_SIGNUP_EMAILS`
+
+Approved bookings can be paid by the tenant through Stripe Checkout. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` on the backend, then configure the Stripe webhook endpoint as `https://<your-backend-url>/api/payments/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, and `checkout.session.expired` events. Payment is marked complete only after Stripe confirms it.
 
 Admin signup is restricted to the comma-separated email addresses in the backend-only `ADMIN_SIGNUP_EMAILS` environment variable. Tenant and owner signup do not require an allowlisted email.
 
