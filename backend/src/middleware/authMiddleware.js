@@ -15,6 +15,10 @@ export const protect = async (req, res, next) => {
     const secret = process.env.JWT_SECRET || 'staynest-ai-local-secret';
     const decoded = jwt.verify(token, secret);
     req.user = await User.findById(decoded.id).select('-password');
+    if (!req.user || (decoded.tokenVersion || 0) !== (req.user.tokenVersion || 0)) {
+      res.status(401);
+      throw new Error('Not authorized, token failed');
+    }
     next();
   } catch (error) {
     res.status(401);

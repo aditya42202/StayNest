@@ -36,12 +36,12 @@ const PropertyDetailsPage = () => {
   }, [id]);
 
   if (loading) {
-    return <section className="mx-auto max-w-7xl px-6 pb-24 pt-8 text-white">Loading property details…</section>;
+    return <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">Loading property details…</section>;
   }
 
   if (!property) {
     return (
-      <section className="mx-auto max-w-7xl px-6 pb-24 pt-8 text-white">
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">
         <div role="alert" className="rounded-3xl border border-white/10 bg-slate-950/80 p-8">
           <p>{error || 'Property details are unavailable.'}</p>
         </div>
@@ -56,7 +56,7 @@ const PropertyDetailsPage = () => {
   ];
 
   return (
-    <section className="mx-auto max-w-7xl px-6 pb-24 pt-8 text-white">
+    <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">
       <div className="grid gap-10 lg:grid-cols-[1.5fr_0.9fr]">
         <div className="space-y-8">
           <div className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">

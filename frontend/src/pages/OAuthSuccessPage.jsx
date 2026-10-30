@@ -16,7 +16,7 @@ const OAuthSuccessPage = () => {
   }, [navigate, searchParams]);
 
   return (
-    <section className="mx-auto max-w-3xl px-6 py-24 text-white">
+    <section className="mx-auto max-w-3xl px-6 pb-24 pt-4 text-white">
       <div className="glass-card rounded-[32px] p-10 text-center shadow-glass">
         <h1 className="text-3xl font-semibold">Signing you in...</h1>
         <p className="mt-4 text-slate-300">Please wait while we complete your login.</p>

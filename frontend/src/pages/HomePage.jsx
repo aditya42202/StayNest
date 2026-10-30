@@ -55,7 +55,7 @@ const HomePage = () => {
 
   return (
     <main className="bg-slate-950 text-white">
-      <section className="relative overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),transparent_35%),radial-gradient(circle_at_right,_rgba(168,85,247,0.18),transparent_25%),linear-gradient(180deg,#010814_0%,#081127_100%)] px-6 py-16 lg:py-24">
+      <section className="relative overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),transparent_35%),radial-gradient(circle_at_right,_rgba(168,85,247,0.18),transparent_25%),linear-gradient(180deg,#010814_0%,#081127_100%)] px-6 pb-16 pt-4 lg:pb-24 lg:pt-6">
         <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-8">
             <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.7 }} className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 shadow-lg shadow-slate-950/20">

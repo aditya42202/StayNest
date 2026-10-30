@@ -1,6 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
@@ -18,6 +20,8 @@ function App() {
         <Route path="/search" element={<SearchResultsPage />} />
         <Route path="/property/:id" element={<PropertyDetailsPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/dashboard/*" element={<DashboardPage />} />
         <Route path="/oauth-success" element={<OAuthSuccessPage />} />

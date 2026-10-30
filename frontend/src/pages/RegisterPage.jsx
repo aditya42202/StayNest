@@ -24,7 +24,7 @@ const RegisterPage = () => {
   };
 
   return (
-    <section className="mx-auto max-w-3xl px-6 py-24 text-white">
+    <section className="mx-auto max-w-3xl px-6 pb-24 pt-4 text-white">
       <div className="glass-card rounded-[32px] border border-white/10 p-10 shadow-glass">
         <h1 className="text-4xl font-semibold">Create your account</h1>
         <p className="mt-3 text-slate-300">Register as a student, owner, or admin to manage bookings and properties.</p>

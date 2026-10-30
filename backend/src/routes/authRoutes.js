@@ -4,6 +4,7 @@ import {
   registerUser,
   loginUser,
   resetPasswordRequest,
+  resetPassword,
   verifyEmail,
   googleAuth,
   googleAuthCallback
@@ -13,7 +14,8 @@ const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
-router.post('/reset-password', resetPasswordRequest);
+router.post('/forgot-password', resetPasswordRequest);
+router.post('/reset-password/:token', resetPassword);
 router.post('/verify-email', verifyEmail);
 router.get('/google', googleAuth);
 router.get('/google/callback', passport.authenticate('google', { session: false }), googleAuthCallback);

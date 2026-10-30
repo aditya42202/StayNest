@@ -216,7 +216,7 @@ const OwnerDashboardPage = () => {
 
   if (loading) {
     return (
-      <section className="mx-auto max-w-7xl px-6 py-24">
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-4">
         <Loader message="Loading owner dashboard..." />
       </section>
     );
@@ -224,7 +224,7 @@ const OwnerDashboardPage = () => {
 
   if (error) {
     return (
-      <section className="mx-auto max-w-7xl px-6 py-24 text-white">
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">
         <div role="alert" className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-rose-200">{error}</div>
         <button type="button" onClick={() => { setLoading(true); fetchData().catch((err) => setError(err.response?.data?.message || 'Unable to load the owner dashboard.')).finally(() => setLoading(false)); }} className="mt-5 rounded-full border border-white/10 px-5 py-2 text-white">
           Try again
@@ -241,7 +241,7 @@ const OwnerDashboardPage = () => {
   ];
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-16 text-white">
+    <section className="mx-auto max-w-7xl px-6 pb-16 pt-4 text-white">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-5">
         <div>
           <p className="text-sm uppercase tracking-[0.24em] text-blue-300">Owner workspace</p>

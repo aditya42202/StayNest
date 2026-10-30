@@ -25,14 +25,14 @@ const StudentDashboardPage = () => {
 
   if (loading) {
     return (
-      <section className="mx-auto max-w-7xl px-6 py-24">
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-4">
         <Loader message="Loading student dashboard..." />
       </section>
     );
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-24 text-white">
+    <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">
       <div className="glass-card rounded-[32px] border border-white/10 p-10 shadow-glass">
         <p className="text-sm uppercase tracking-[0.24em] text-blue-300">Student dashboard</p>
         <h1 className="mt-2 text-4xl font-semibold">Your bookings</h1>

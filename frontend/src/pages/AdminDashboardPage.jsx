@@ -104,7 +104,7 @@ const AdminDashboardPage = () => {
 
   if (loading) {
     return (
-      <section className="mx-auto max-w-7xl px-6 py-24">
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-4">
         <Loader message="Loading admin dashboard..." />
       </section>
     );
@@ -112,7 +112,7 @@ const AdminDashboardPage = () => {
 
   if (error) {
     return (
-      <section className="mx-auto max-w-7xl px-6 py-24 text-white">
+      <section className="mx-auto max-w-7xl px-6 pb-24 pt-4 text-white">
         <div role="alert" className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-rose-200">{error}</div>
       </section>
     );
@@ -128,7 +128,7 @@ const AdminDashboardPage = () => {
   ];
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-16 text-white">
+    <section className="mx-auto max-w-7xl px-6 pb-16 pt-4 text-white">
       <header className="mb-8">
         <p className="text-sm uppercase tracking-[0.24em] text-blue-300">StayNest administration</p>
         <h1 className="mt-2 text-4xl font-semibold">Admin dashboard</h1>

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginRequest, loginSuccess, loginFailure } from '../store/authSlice.js';
 import apiClient from '../api/apiClient.js';
 
 const LoginPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -27,15 +28,19 @@ const LoginPage = () => {
   };
 
   return (
-    <section className="mx-auto max-w-3xl px-6 py-24 text-white">
+    <section className="mx-auto max-w-3xl px-6 pb-24 pt-4 text-white">
       <div className="glass-card rounded-[32px] border border-white/10 p-10 shadow-glass">
         <h1 className="text-4xl font-semibold">Welcome Back</h1>
         <p className="mt-3 text-slate-300">Login to access your StayNest AI dashboard and bookings.</p>
+        {location.state?.message && <p role="status" className="mt-5 text-sm text-emerald-300">{location.state.message}</p>}
 
         <form onSubmit={handleSubmit} className="mt-10 space-y-5">
           <input value={email} onChange={(e) => setEmail(e.target.value)} required type="email" placeholder="Email" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           <input value={password} onChange={(e) => setPassword(e.target.value)} required type="password" placeholder="Password" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           {error && <p className="text-sm text-rose-400">{error}</p>}
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-sm text-blue-300 hover:text-white">Forgot password?</Link>
+          </div>
           <button type="submit" className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95">Sign in</button>
         </form>
 
