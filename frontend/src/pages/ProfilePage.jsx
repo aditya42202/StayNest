@@ -139,7 +139,18 @@ const ProfilePage = () => {
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Full name" name="name" value={form.name} onChange={handleChange} required maxLength={100} autoComplete="name" />
             <Field label="Email address" name="email" value={form.email} readOnly aria-readonly="true" />
-            <Field label="Phone number" name="phone" value={form.phone} onChange={handleChange} type="tel" maxLength={30} autoComplete="tel" placeholder="Add your phone number" />
+            <Field
+              label={`Phone number${user.role === 'owner' ? ' (required)' : ''}`}
+              name="phone"
+              value={form.phone}
+              onChange={handleChange}
+              type="tel"
+              maxLength={30}
+              minLength={user.role === 'owner' ? 7 : undefined}
+              autoComplete="tel"
+              placeholder="Add your phone number"
+              required={user.role === 'owner'}
+            />
           </div>
         </section>
 
@@ -161,9 +172,10 @@ const ProfilePage = () => {
         {user.role === 'owner' && (
           <section>
             <h2 className="mb-5 text-xl font-semibold">Owner / business details</h2>
+            <p className="mb-5 text-sm text-slate-400">Complete the required owner details before saving. Website is optional.</p>
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Business / listing name" name="businessName" value={form.businessName} onChange={handleChange} maxLength={120} placeholder="Business name (optional)" />
-              <Field label="Website" name="website" value={form.website} onChange={handleChange} type="url" maxLength={200} placeholder="https://example.com" />
+              <Field label="Business / listing name (required)" name="businessName" value={form.businessName} onChange={handleChange} required maxLength={120} placeholder="Business or listing name" />
+              <Field label="Website (optional)" name="website" value={form.website} onChange={handleChange} type="url" maxLength={200} placeholder="https://example.com" />
               <div className="sm:col-span-2">
                 <label className="block text-sm text-slate-300">
                   Business address
@@ -172,8 +184,9 @@ const ProfilePage = () => {
                     value={form.businessAddress}
                     onChange={handleChange}
                     rows="3"
+                    required
                     maxLength={300}
-                    placeholder="Business or correspondence address (optional)"
+                    placeholder="Business or correspondence address"
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-blue-400"
                   />
                 </label>

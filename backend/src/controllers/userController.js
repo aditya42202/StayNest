@@ -38,9 +38,14 @@ export const updateProfile = async (req, res) => {
   } else if (req.user.role === 'owner') {
     user.ownerProfile ??= {};
     const { businessName, businessAddress, website } = req.body.ownerProfile || {};
-    if (businessName !== undefined) user.ownerProfile.businessName = businessName;
-    if (businessAddress !== undefined) user.ownerProfile.businessAddress = businessAddress;
-    if (website !== undefined) user.ownerProfile.website = website;
+    if (businessName !== undefined) user.ownerProfile.businessName = String(businessName).trim();
+    if (businessAddress !== undefined) user.ownerProfile.businessAddress = String(businessAddress).trim();
+    if (website !== undefined) user.ownerProfile.website = String(website).trim();
+
+    if (!user.name || !user.phone || !user.ownerProfile.businessName || !user.ownerProfile.businessAddress) {
+      res.status(400);
+      throw new Error('Owners must provide their name, phone number, business/listing name, and business address');
+    }
   } else if (req.user.role === 'admin') {
     user.adminProfile ??= {};
     const { department, designation } = req.body.adminProfile || {};
