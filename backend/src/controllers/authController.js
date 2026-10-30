@@ -13,25 +13,37 @@ const saltRounds = 10;
 export const registerUser = async (req, res) => {
   const { name, email, password, role } = req.body;
   const requestedRole = canonicalRole(role || 'user');
-  if (!['user', 'owner'].includes(requestedRole)) {
-    res.status(403);
-    throw new Error('Administrator accounts must be created by an existing administrator');
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!['user', 'owner', 'admin'].includes(requestedRole)) {
+    res.status(400);
+    throw new Error('Please select a valid account type');
   }
 
-  const existingUser = await User.findOne({ email });
+  if (requestedRole === 'admin') {
+    const allowedAdminEmails = (process.env.ADMIN_SIGNUP_EMAILS || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+    if (!allowedAdminEmails.includes(normalizedEmail)) {
+      res.status(403);
+      throw new Error('This email is not approved for admin signup');
+    }
+  }
+
+  const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     res.status(400);
     throw new Error('Email already registered');
   }
 
   const hashedPassword = await bcrypt.hash(password, saltRounds);
-  const user = await User.create({ name, email, password: hashedPassword, role: requestedRole });
+  const user = await User.create({ name, email: normalizedEmail, password: hashedPassword, role: requestedRole });
 
   const token = generateToken(user);
   if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     try {
       await sendEmail({
-        to: email,
+        to: normalizedEmail,
         subject: 'Verify your StayNest AI account',
         text: `Use this link to verify your email: ${process.env.CLIENT_URL}/verify/${token}`
       });

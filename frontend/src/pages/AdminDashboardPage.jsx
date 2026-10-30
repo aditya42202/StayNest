@@ -5,7 +5,10 @@ import {
   getAllBookings,
   getAllProperties,
   getAllUsers,
-  verifyProperty
+  verifyProperty,
+  getOwnerListingRequests,
+  approveOwnerListingRequest,
+  rejectOwnerListingRequest
 } from '../api/adminApi.js';
 import Loader from '../components/Loader.jsx';
 
@@ -13,6 +16,7 @@ const tabs = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
   { id: 'properties', label: 'Properties' },
+  { id: 'requests', label: 'Listing requests' },
   { id: 'bookings', label: 'Bookings' }
 ];
 
@@ -22,6 +26,7 @@ const AdminDashboardPage = () => {
   const [dashboard, setDashboard] = useState(null);
   const [users, setUsers] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [listingRequests, setListingRequests] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
@@ -30,22 +35,26 @@ const AdminDashboardPage = () => {
   const [propertyFilter, setPropertyFilter] = useState('all');
   const [bookingFilter, setBookingFilter] = useState('all');
   const [updatingPropertyId, setUpdatingPropertyId] = useState('');
+  const [updatingRequestId, setUpdatingRequestId] = useState('');
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [dashboardRes, usersRes, propertiesRes, bookingsRes] = await Promise.all([
+        const [dashboardRes, usersRes, propertiesRes, bookingsRes, requestsRes] = await Promise.all([
           getAdminDashboard(),
           getAllUsers(),
           getAllProperties(),
-          getAllBookings()
+          getAllBookings(),
+          getOwnerListingRequests()
         ]);
         setDashboard(dashboardRes.data);
         setUsers(usersRes.data.users);
         setProperties(propertiesRes.data.properties);
         setBookings(bookingsRes.data.bookings);
+        setListingRequests(requestsRes.data.requests);
       } catch (requestError) {
         setError(requestError.response?.data?.message || 'Unable to load admin data. Please try again later.');
       } finally {
@@ -83,6 +92,13 @@ const AdminDashboardPage = () => {
     });
   }, [bookings, bookingFilter, search]);
 
+  const filteredListingRequests = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return listingRequests.filter((request) =>
+      !query || `${request.ownerName} ${request.email} ${request.phone} ${request.title} ${request.city} ${request.area}`.toLowerCase().includes(query)
+    );
+  }, [listingRequests, search]);
+
   const handleVerification = async (property) => {
     setUpdatingPropertyId(property._id);
     setActionError('');
@@ -99,6 +115,27 @@ const AdminDashboardPage = () => {
       setActionError(requestError.response?.data?.message || 'Unable to update property verification.');
     } finally {
       setUpdatingPropertyId('');
+    }
+  };
+
+  const handleListingRequestDecision = async (request, decision) => {
+    if (decision === 'reject' && !window.confirm(`Reject the property request from ${request.ownerName}?`)) return;
+    setUpdatingRequestId(request._id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      const { data } = decision === 'approve'
+        ? await approveOwnerListingRequest(request._id)
+        : await rejectOwnerListingRequest(request._id);
+      setListingRequests((current) => current.filter((item) => item._id !== request._id));
+      setActionMessage(data.message || `Property request ${decision}d.`);
+      if (data.property) {
+        setProperties((current) => [data.property, ...current]);
+      }
+    } catch (requestError) {
+      setActionError(requestError.response?.data?.message || `Unable to ${decision} this request.`);
+    } finally {
+      setUpdatingRequestId('');
     }
   };
 
@@ -123,6 +160,7 @@ const AdminDashboardPage = () => {
     { label: 'Owners', value: dashboard.ownerCount },
     { label: 'Properties', value: dashboard.propertyCount },
     { label: 'Pending verification', value: properties.filter((property) => !property.verified).length },
+    { label: 'Listing requests', value: listingRequests.filter((request) => request.status === 'pending').length },
     { label: 'Bookings', value: dashboard.bookingCount },
     { label: 'Pending bookings', value: bookings.filter((booking) => booking.status === 'pending').length }
   ];
@@ -168,6 +206,11 @@ const AdminDashboardPage = () => {
       {actionError && (
         <div role="alert" className="mt-6 rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-rose-200">
           {actionError}
+        </div>
+      )}
+      {actionMessage && (
+        <div role="status" className="mt-6 rounded-3xl border border-emerald-400/30 bg-emerald-500/10 p-5 text-emerald-200">
+          {actionMessage}
         </div>
       )}
 
@@ -233,7 +276,9 @@ const AdminDashboardPage = () => {
                   ? 'Search users by name or email'
                   : activeTab === 'properties'
                     ? 'Search listings by title, location, or owner'
-                    : 'Search bookings by student, property, or owner'
+                    : activeTab === 'requests'
+                      ? 'Search requests by owner, email, title, or location'
+                      : 'Search bookings by student, property, or owner'
               }
               aria-label={`Search ${activeTab}`}
               className="min-w-0 flex-1 rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-3 text-white outline-none placeholder:text-slate-500 focus:border-blue-400"
@@ -310,6 +355,54 @@ const AdminDashboardPage = () => {
                       className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-blue-400 hover:text-white disabled:cursor-wait disabled:opacity-50"
                     >
                       {updatingPropertyId === property._id ? 'Updating...' : property.verified ? 'Remove verification' : 'Verify listing'}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'requests' && (
+            <div className="space-y-4">
+              {filteredListingRequests.length === 0 ? (
+                <p className="text-slate-400">No pending property requests.</p>
+              ) : filteredListingRequests.map((request) => (
+                <article key={request._id} className="glass-card rounded-3xl border border-white/10 p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-semibold">{request.title}</h2>
+                      <p className="mt-1 text-sm text-slate-400">{request.category} · {request.area}, {request.city} · ₹{request.rent}/month</p>
+                    </div>
+                    <span className="rounded-full bg-amber-500/10 px-3 py-1 text-sm text-amber-200">Pending review</span>
+                  </div>
+                  <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                    <p>Owner: {request.ownerName}</p>
+                    <p>Phone: <a className="text-blue-200 hover:text-white" href={`tel:${request.phone}`}>{request.phone}</a></p>
+                    <p>Email: <a className="text-blue-200 hover:text-white" href={`mailto:${request.email}`}>{request.email}</a></p>
+                    <p>Deposit: ₹{request.deposit || 0}</p>
+                    <p className="sm:col-span-2">Address: {request.address}</p>
+                    {request.college && <p>Nearby college: {request.college}</p>}
+                    {request.landmark && <p>Landmark: {request.landmark}</p>}
+                    <p className="sm:col-span-2">{request.description}</p>
+                    {request.amenities?.length > 0 && <p className="sm:col-span-2">Amenities: {request.amenities.join(', ')}</p>}
+                    {request.images?.length > 0 && <p className="sm:col-span-2">Image URLs: {request.images.join(', ')}</p>}
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleListingRequestDecision(request, 'approve')}
+                      disabled={updatingRequestId === request._id}
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-50"
+                    >
+                      {updatingRequestId === request._id ? 'Processing...' : 'Approve and publish'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleListingRequestDecision(request, 'reject')}
+                      disabled={updatingRequestId === request._id}
+                      className="rounded-xl border border-rose-400/40 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-500/10 disabled:cursor-wait disabled:opacity-50"
+                    >
+                      Reject request
                     </button>
                   </div>
                 </article>

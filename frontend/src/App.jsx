@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import PropertyDetailsPage from './pages/PropertyDetailsPage.jsx';
+import PublicOwnerListingPage from './pages/PublicOwnerListingPage.jsx';
 import OAuthSuccessPage from './pages/OAuthSuccessPage.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
@@ -21,6 +22,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchResultsPage />} />
         <Route path="/property/:id" element={<PropertyDetailsPage />} />
+        <Route path="/list-property" element={<PublicOwnerListingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />

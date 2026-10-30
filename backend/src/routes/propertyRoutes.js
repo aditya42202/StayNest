@@ -11,6 +11,7 @@ import {
   removeWishlist,
   createReview
 } from '../controllers/propertyController.js';
+import { submitOwnerListingRequest } from '../controllers/ownerListingRequestController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -18,6 +19,7 @@ const router = express.Router();
 router.get('/', getProperties);
 router.get('/search', searchProperties);
 router.get('/featured', getFeaturedProperties);
+router.post('/owner-listing-requests', submitOwnerListingRequest);
 router.get('/:id', getPropertyById);
 router.post('/', protect, authorize('owner', 'admin'), createProperty);
 router.put('/:id', protect, authorize('owner', 'admin'), updateProperty);

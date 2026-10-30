@@ -33,6 +33,8 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 1. Create a Render Web Service in your Render account.
 2. Use `render.yaml` to configure the backend service.
 3. Add the same environment variables shown in `render.yaml` using Render secrets or env vars:
-   - `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`
+   - `MONGO_URI`, `JWT_SECRET`, `CLIENT_URL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `ADMIN_SIGNUP_EMAILS`
+
+Admin signup is restricted to the comma-separated email addresses in the backend-only `ADMIN_SIGNUP_EMAILS` environment variable. Tenant and owner signup do not require an allowlisted email.
 
 Password recovery requires the backend email settings (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASS`). Set `CLIENT_URL` to the frontend URL so reset links open the deployed app; `FRONTEND_URL` can be used to override it. Reset links expire after 15 minutes and can only be used once.

@@ -83,6 +83,9 @@ const HomePage = () => {
                 <button onClick={() => navigate('/search')} className="rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:opacity-95">
                   View all categories
                 </button>
+                <button onClick={() => navigate('/list-property')} className="rounded-full border border-emerald-400/40 px-5 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/10">
+                  List your property
+                </button>
               </div>
 
               <div className="mt-6">
