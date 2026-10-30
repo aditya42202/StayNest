@@ -8,24 +8,43 @@ const OwnerDashboardPage = () => {
   const [properties, setProperties] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      const [dashboardRes, propertiesRes, requestsRes] = await Promise.all([
-        getOwnerDashboard(),
-        getOwnerProperties(),
-        getOwnerBookingRequests()
-      ]);
-      setDashboard(dashboardRes.data);
-      setProperties(propertiesRes.data.properties);
-      setRequests(requestsRes.data.requests);
-      setLoading(false);
+      try {
+        const [dashboardRes, propertiesRes, requestsRes] = await Promise.all([
+          getOwnerDashboard(),
+          getOwnerProperties(),
+          getOwnerBookingRequests()
+        ]);
+        setDashboard(dashboardRes.data);
+        setProperties(propertiesRes.data.properties);
+        setRequests(requestsRes.data.requests);
+      } catch (requestError) {
+        setError(requestError.response?.data?.message || 'Unable to load the owner dashboard. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);
 
-  if (loading) return <Loader message="Loading owner dashboard..." />;
+  if (loading) {
+    return (
+      <section className="mx-auto max-w-7xl px-6 py-24">
+        <Loader message="Loading owner dashboard..." />
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="mx-auto max-w-7xl px-6 py-24 text-white">
+        <div role="alert" className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-rose-200">{error}</div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-7xl px-6 py-24 text-white">

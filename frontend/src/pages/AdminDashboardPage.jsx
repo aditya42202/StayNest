@@ -7,24 +7,43 @@ const AdminDashboardPage = () => {
   const [users, setUsers] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      const [dashboardRes, usersRes, propertiesRes] = await Promise.all([
-        getAdminDashboard(),
-        getAllUsers(),
-        getAllProperties()
-      ]);
-      setDashboard(dashboardRes.data);
-      setUsers(usersRes.data.users);
-      setProperties(propertiesRes.data.properties);
-      setLoading(false);
+      try {
+        const [dashboardRes, usersRes, propertiesRes] = await Promise.all([
+          getAdminDashboard(),
+          getAllUsers(),
+          getAllProperties()
+        ]);
+        setDashboard(dashboardRes.data);
+        setUsers(usersRes.data.users);
+        setProperties(propertiesRes.data.properties);
+      } catch (requestError) {
+        setError(requestError.response?.data?.message || 'Unable to load the admin dashboard. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);
 
-  if (loading) return <Loader message="Loading admin dashboard..." />;
+  if (loading) {
+    return (
+      <section className="mx-auto max-w-7xl px-6 py-24">
+        <Loader message="Loading admin dashboard..." />
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="mx-auto max-w-7xl px-6 py-24 text-white">
+        <div role="alert" className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 text-rose-200">{error}</div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-7xl px-6 py-24 text-white">
