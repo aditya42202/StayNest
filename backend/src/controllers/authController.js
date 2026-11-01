@@ -4,7 +4,6 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
 import RefreshToken from '../models/RefreshToken.js';
-import generateToken from '../utils/generateToken.js';
 import {
   REFRESH_COOKIE_NAME,
   clearRefreshCookie,
@@ -13,7 +12,6 @@ import {
   revokeAuthSession
 } from '../utils/authSession.js';
 import {
-  createEmailVerificationCode,
   hashEmailVerificationCode,
   isValidPassword,
   matchesEmailVerificationCode,
@@ -23,7 +21,7 @@ import { sendEmail } from '../utils/sendEmail.js';
 import { canonicalRole, normalizeRole } from '../utils/roles.js';
 
 const saltRounds = 12;
-const verificationCodeLifetimeMs = 10 * 60 * 1000;
+const verificationLinkLifetimeMs = 24 * 60 * 60 * 1000;
 const maxVerificationAttempts = 5;
 
 const authUser = (user) => ({
@@ -37,8 +35,7 @@ const authUser = (user) => ({
 const isEmailServiceConfigured = () => Boolean(
   process.env.EMAIL_HOST &&
   process.env.EMAIL_USER &&
-  process.env.EMAIL_PASS &&
-  process.env.EMAIL_PORT
+  process.env.EMAIL_PASS
 );
 
 const getClientUrl = () => (
@@ -82,7 +79,10 @@ export const registerUser = async (req, res) => {
     }
   }
 
-  const emailServiceConfigured = isEmailServiceConfigured();
+  if (!isEmailServiceConfigured()) {
+    res.status(503);
+    throw new Error('Email verification is not configured. Please try again later.');
+  }
 
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
@@ -91,46 +91,36 @@ export const registerUser = async (req, res) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, saltRounds);
-  const verificationCode = createEmailVerificationCode();
-  const verificationSalt = randomBytes(16).toString('hex');
+  const verificationToken = randomBytes(32).toString('hex');
+  const verificationTokenHash = createHash('sha256').update(verificationToken).digest('hex');
   const user = await User.create({
     name: normalizedName,
     email: normalizedEmail,
     password: hashedPassword,
     role: requestedRole,
-    verified: !emailServiceConfigured,
-    emailVerificationRequired: emailServiceConfigured,
-    emailVerificationCodeHash: emailServiceConfigured
-      ? hashEmailVerificationCode(normalizedEmail, verificationCode, verificationSalt)
-      : undefined,
-    emailVerificationSalt: emailServiceConfigured ? verificationSalt : undefined,
-    emailVerificationExpires: emailServiceConfigured
-      ? new Date(Date.now() + verificationCodeLifetimeMs)
-      : undefined,
+    verified: false,
+    emailVerificationRequired: true,
+    emailVerificationCodeHash: verificationTokenHash,
+    emailVerificationExpires: new Date(Date.now() + verificationLinkLifetimeMs),
     emailVerificationAttempts: 0
   });
 
-  if (emailServiceConfigured) {
-    try {
-      await sendEmail({
-        to: normalizedEmail,
-        subject: 'Your StayNest AI verification code',
-        text: `Your StayNest AI verification code is ${verificationCode}. It expires in 10 minutes.`
-      });
-    } catch (emailError) {
-      console.error('Verification email could not be sent:', emailError.message);
-      res.status(503);
-      throw new Error('Your account was created, but the verification email could not be sent. Request a new code to continue.');
-    }
-  } else {
-    console.warn('Email service is not configured. Registering the account as verified for this environment.');
+  const verificationUrl = `${getClientUrl()}/verify-email?token=${verificationToken}`;
+  try {
+    await sendEmail({
+      to: normalizedEmail,
+      subject: 'Verify your StayNest AI account',
+      text: `Welcome to StayNest AI. Verify your email by opening this link within 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`
+    });
+  } catch (emailError) {
+    console.error('Verification email could not be sent:', emailError.message);
+    res.status(503);
+    throw new Error('Your account was created, but the verification email could not be sent. Request a new link to continue.');
   }
 
-  const token = generateToken(user);
   res.status(201).json({
     user: authUser(user),
-    token,
-    verificationRequired: emailServiceConfigured
+    verificationRequired: true
   });
 };
 
@@ -166,7 +156,8 @@ export const resetPasswordRequest = async (req, res) => {
     throw new Error('Email is required');
   }
   if (!isEmailServiceConfigured()) {
-    return res.json({ message: 'If an account exists for that email, a password reset link has been sent.' });
+    res.status(503);
+    throw new Error('Password reset email is not configured. Please try again later.');
   }
 
   const user = await User.findOne({ email });
@@ -244,28 +235,40 @@ export const resetPassword = async (req, res) => {
 
 export const verifyEmail = async (req, res) => {
   const email = normalizeEmail(req.body.email);
-  const { code } = req.body;
-  if (!email || typeof code !== 'string') {
+  const { code, token } = req.body;
+  const isLinkVerification = typeof token === 'string';
+  if (!isLinkVerification && (!email || typeof code !== 'string')) {
     res.status(400);
-    throw new Error('Email and the six-digit verification code are required');
+    throw new Error('A verification link or email and six-digit verification code are required');
   }
 
-  const user = await User.findOne({ email, emailVerificationRequired: true, verified: false })
-    .select('+emailVerificationCodeHash +emailVerificationSalt +emailVerificationExpires');
-  const codeIsCurrent = user
-    && user.emailVerificationExpires
-    && user.emailVerificationExpires > new Date()
-    && user.emailVerificationAttempts < maxVerificationAttempts;
-
-  if (!codeIsCurrent) {
-    res.status(400);
-    throw new Error('Verification code is invalid or has expired');
+  const tokenHash = isLinkVerification && /^[a-f\d]{64}$/i.test(token)
+    ? createHash('sha256').update(token).digest('hex')
+    : null;
+  const verificationQuery = isLinkVerification
+    ? {
+      emailVerificationCodeHash: tokenHash,
+      emailVerificationRequired: true,
+      verified: false,
+      emailVerificationExpires: { $gt: new Date() }
+    }
+    : { email, emailVerificationRequired: true, verified: false };
+  let user;
+  if (tokenHash || !isLinkVerification) {
+    user = await User.findOne(verificationQuery)
+      .select('+emailVerificationCodeHash +emailVerificationSalt +emailVerificationExpires');
   }
-  if (!matchesEmailVerificationCode(
-    email,
-    code,
-    user.emailVerificationSalt,
-    user.emailVerificationCodeHash
+
+  if (!user) {
+    res.status(400);
+    throw new Error('Verification link or code is invalid or has expired');
+  }
+
+  if (!isLinkVerification && (
+    !user.emailVerificationExpires ||
+    user.emailVerificationExpires <= new Date() ||
+    user.emailVerificationAttempts >= maxVerificationAttempts ||
+    !matchesEmailVerificationCode(email, code, user.emailVerificationSalt, user.emailVerificationCodeHash)
   )) {
     user.emailVerificationAttempts += 1;
     if (user.emailVerificationAttempts >= maxVerificationAttempts) {
@@ -276,7 +279,7 @@ export const verifyEmail = async (req, res) => {
     }
     await user.save();
     res.status(400);
-    throw new Error('Verification code is invalid or has expired');
+    throw new Error('Verification link or code is invalid or has expired');
   }
 
   user.verified = true;
@@ -289,32 +292,33 @@ export const verifyEmail = async (req, res) => {
   res.json({ message: 'Email verified successfully' });
 };
 
-export const resendVerificationCode = async (req, res) => {
+export const resendVerificationEmail = async (req, res) => {
   const email = normalizeEmail(req.body.email);
   if (!email) {
     res.status(400);
     throw new Error('Email is required');
   }
   if (!isEmailServiceConfigured()) {
-    return res.json({ message: 'Email verification is not configured in this environment. Please sign in to continue.' });
+    res.status(503);
+    throw new Error('Email verification is not configured. Please try again later.');
   }
 
   const user = await User.findOne({ email, verified: false });
   if (user) {
-    const verificationCode = createEmailVerificationCode();
-    const verificationSalt = randomBytes(16).toString('hex');
+    const verificationToken = randomBytes(32).toString('hex');
     user.emailVerificationRequired = true;
-    user.emailVerificationCodeHash = hashEmailVerificationCode(email, verificationCode, verificationSalt);
-    user.emailVerificationSalt = verificationSalt;
-    user.emailVerificationExpires = new Date(Date.now() + verificationCodeLifetimeMs);
+    user.emailVerificationCodeHash = createHash('sha256').update(verificationToken).digest('hex');
+    user.emailVerificationSalt = undefined;
+    user.emailVerificationExpires = new Date(Date.now() + verificationLinkLifetimeMs);
     user.emailVerificationAttempts = 0;
     await user.save();
 
+    const verificationUrl = `${getClientUrl()}/verify-email?token=${verificationToken}`;
     try {
       await sendEmail({
         to: email,
-        subject: 'Your StayNest AI verification code',
-        text: `Your StayNest AI verification code is ${verificationCode}. It expires in 10 minutes.`
+        subject: 'Verify your StayNest AI account',
+        text: `Verify your email by opening this link within 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`
       });
     } catch (emailError) {
       console.error('Verification email could not be sent:', emailError.message);
@@ -323,7 +327,7 @@ export const resendVerificationCode = async (req, res) => {
     }
   }
 
-  res.json({ message: 'If an unverified account exists for that email, a new code has been sent.' });
+  res.json({ message: 'If an unverified account exists for that email, a new verification link has been sent.' });
 };
 
 export const refreshSession = async (req, res) => {

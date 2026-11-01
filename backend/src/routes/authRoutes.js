@@ -6,7 +6,7 @@ import {
   resetPasswordRequest,
   resetPassword,
   verifyEmail,
-  resendVerificationCode,
+  resendVerificationEmail,
   refreshSession,
   logoutUser,
   googleAuth,
@@ -28,7 +28,7 @@ router.post('/login', loginLimiter, loginUser);
 router.post('/forgot-password', passwordResetLimiter, resetPasswordRequest);
 router.post('/reset-password/:token', passwordResetLimiter, resetPassword);
 router.post('/verify-email', verificationLimiter, verifyEmail);
-router.post('/resend-verification', resendVerificationLimiter, resendVerificationCode);
+router.post('/resend-verification', resendVerificationLimiter, resendVerificationEmail);
 router.post('/refresh', refreshLimiter, refreshSession);
 router.post('/logout', logoutUser);
 router.get('/google', loginLimiter, googleAuth);

@@ -18,7 +18,11 @@ const RegisterPage = () => {
       if (data.verificationRequired) {
         navigate('/verify-email', {
           replace: true,
-          state: { email: data.user?.email || form.email, from: location.state?.from }
+          state: {
+            email: data.user?.email || form.email,
+            message: 'We sent a verification link to your email. Open it to verify your account, then sign in.',
+            from: location.state?.from
+          }
         });
         return;
       }
@@ -34,7 +38,7 @@ const RegisterPage = () => {
       if (message.includes('account was created')) {
         navigate('/verify-email', {
           replace: true,
-          state: { email: form.email, message, from: location.state?.from }
+          state: { email: form.email, error: message, from: location.state?.from }
         });
         return;
       }

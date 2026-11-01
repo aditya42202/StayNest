@@ -41,7 +41,7 @@ Owners can set monthly, daily, and hourly rent rates. If daily/hourly rates are 
 
 Admin signup is restricted to the comma-separated email addresses in the backend-only `ADMIN_SIGNUP_EMAILS` environment variable. Tenant and owner signup do not require an allowlisted email.
 
-Password recovery requires the backend email settings (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASS`). In local/demo environments without SMTP credentials, the app falls back to a verified-user flow so account creation still works, but email-based verification and password reset links are skipped. Set `CLIENT_URL` to the frontend URL so reset links open the deployed app; `FRONTEND_URL` can be used to override it. Reset links expire after 15 minutes and can only be used once.
+Account registration and password recovery require the backend email settings (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASS`). For Gmail SMTP, use `smtp.gmail.com`, port `587`, your Gmail address, and a Google app password. Set `CLIENT_URL` to the frontend URL so verification and reset links open the deployed app; `FRONTEND_URL` can be used to override it. Email verification links expire after 24 hours. Password reset links expire after 15 minutes and can only be used once. Users must verify their email before signing in.
 
 ### Stay search and booking
 
