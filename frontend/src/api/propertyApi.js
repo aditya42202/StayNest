@@ -10,3 +10,4 @@ export const addToWishlist = (id) => apiClient.post(`/properties/${id}/wishlist`
 export const removeFromWishlist = (id) => apiClient.delete(`/properties/${id}/wishlist`);
 export const getWishlist = () => apiClient.get('/users/wishlist');
 export const createBooking = (data) => apiClient.post('/bookings', data);
+export const checkBookingAvailability = (params) => apiClient.get('/bookings/availability', { params });

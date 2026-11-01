@@ -2,11 +2,23 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../api/apiClient.js';
 
-const filters = ['Boys PG', 'Girls PG', 'Hostel', 'Shared Room', 'Looking to Rent', 'More'];
+const filters = ['Hotel', 'Hostel', 'Homestay', 'Student Room', 'Hourly stay', 'Boys PG', 'Girls PG', 'More'];
+
+const formatCategory = (category) => category.replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const rateForProperty = (property, billingUnit) => {
+  const monthlyRate = Number(property.rent);
+  const dailyRate = Number(property.rentPerDay || monthlyRate / 30);
+  if (billingUnit === 'hour') return Number(property.rentPerHour || dailyRate / 24);
+  if (billingUnit === 'day') return dailyRate;
+  if (billingUnit === 'year') return monthlyRate * 12;
+  return monthlyRate;
+};
 
 const SearchResultsPage = () => {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -15,17 +27,19 @@ const SearchResultsPage = () => {
     const categoryMap = {
       'Boys PG': 'boys pg',
       'Girls PG': 'girls pg',
+      Hotel: 'hotel',
       Hostel: 'hostel',
-      'Shared Room': 'shared room'
+      Homestay: 'homestay',
+      'Student Room': 'student room',
+      'Hourly stay': 'hourly stay room'
     };
 
     if (filter === 'More') {
       newParams.delete('category');
       newParams.delete('q');
       newParams.delete('budget');
-    } else if (filter === 'Looking to Rent') {
-      newParams.set('q', 'rent');
-      newParams.delete('category');
+      newParams.delete('minPrice');
+      newParams.delete('maxPrice');
     } else {
       newParams.set('category', categoryMap[filter] || filter.toLowerCase());
       newParams.delete('q');
@@ -40,13 +54,13 @@ const SearchResultsPage = () => {
       setLoading(true);
       try {
         const query = Object.fromEntries(searchParams.entries());
-        console.debug('SearchResultsPage - query params:', query);
         const { data } = await apiClient.get('/properties/search', { params: query });
-        console.debug('SearchResultsPage - response:', data);
         setProperties(data.properties || []);
+        setTotal(data.total ?? data.properties?.length ?? 0);
       } catch (error) {
         console.error('Failed to fetch properties', error);
         setProperties([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
@@ -60,7 +74,7 @@ const SearchResultsPage = () => {
         <div>
           <p className="text-sm uppercase tracking-[0.24em] text-blue-300">Search Results</p>
           <h1 className="mt-2 text-4xl font-semibold">Find your ideal stay</h1>
-          <p className="mt-3 text-slate-400">1200+ properties found matching your preferences.</p>
+          <p className="mt-3 text-slate-400">{total} {total === 1 ? 'property' : 'properties'} found matching your preferences.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           {filters.map((filter) => (
@@ -86,18 +100,18 @@ const SearchResultsPage = () => {
               properties.map((property) => (
                 <Link key={property._id} to={`/property/${property._id}`} className="group block overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/80 p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-200">{property.category}</span>
-                    <span className="text-sm font-semibold text-white">₹{property.rent}/month</span>
+                    <span className="rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-200">{formatCategory(property.category)}</span>
+                    <span className="text-sm font-semibold text-white">₹{Number(property.searchRate ?? rateForProperty(property, searchParams.get('billingUnit') || 'month')).toFixed(2)}/{searchParams.get('billingUnit') || 'month'}</span>
                   </div>
                   <h2 className="mt-4 text-2xl font-semibold text-white">{property.title}</h2>
                   <p className="mt-3 max-w-2xl text-slate-400">{property.description || 'Comfortable stay with all essential amenities and nearby conveniences.'}</p>
+                  {property.images?.[0] && <img src={property.images[0]} alt={property.title} className="mt-5 h-52 w-full rounded-2xl object-cover" />}
                   <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
                     <span>{property.area}, {property.city}</span>
                     <span className="h-1 w-1 rounded-full bg-slate-500" />
                     <span>Owner: {property.owner?.name || 'Not available'}</span>
-                    <span className="h-1 w-1 rounded-full bg-slate-500" />
-                    <span>{property.amenities?.slice(0, 3).join(' • ')}</span>
                   </div>
+                  {property.amenities?.length > 0 && <p className="mt-3 text-sm text-slate-400">{property.amenities.slice(0, 4).join(' · ')}</p>}
                 </Link>
               ))
             )}
@@ -110,12 +124,9 @@ const SearchResultsPage = () => {
             </div>
             <div className="space-y-4">
               <div className="rounded-3xl bg-slate-900/90 p-5">
-                <p className="text-sm text-slate-400">Average Price</p>
-                <p className="mt-2 text-2xl font-semibold">₹7,500</p>
-              </div>
-              <div className="rounded-3xl bg-slate-900/90 p-5">
-                <p className="text-sm text-slate-400">Best located near</p>
-                <p className="mt-2 text-lg font-semibold">College & transport</p>
+                <p className="text-sm text-slate-400">Current search</p>
+                <p className="mt-2 text-lg font-semibold">{searchParams.get('city') || 'All destinations'}</p>
+                <p className="mt-1 text-sm text-slate-400">Prices are shown per {searchParams.get('billingUnit') || 'month'}.</p>
               </div>
             </div>
           </aside>

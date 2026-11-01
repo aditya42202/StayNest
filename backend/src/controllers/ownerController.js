@@ -1,7 +1,5 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
-import Room from '../models/Room.js';
-import { addBillingPeriod, calculateRentalPrice } from '../utils/rentalPricing.js';
 
 export const getOwnerDashboard = async (req, res) => {
   const propertyCount = await Property.countDocuments({ owner: req.user._id });
@@ -36,7 +34,7 @@ export const getOwnerBookings = async (req, res) => {
 };
 
 export const verifyBookingRequest = async (req, res) => {
-  const { status, checkIn, checkOut } = req.body;
+  const { status } = req.body;
   if (!['approved', 'rejected'].includes(status)) {
     res.status(400);
     throw new Error('Booking status must be approved or rejected');
@@ -53,46 +51,25 @@ export const verifyBookingRequest = async (req, res) => {
   }
 
   if (status === 'approved') {
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
     if (
-      !checkIn ||
-      !checkOut ||
-      Number.isNaN(checkInDate.getTime()) ||
-      Number.isNaN(checkOutDate.getTime()) ||
-      checkOutDate <= checkInDate ||
-      checkInDate < new Date()
+      !booking.checkIn
+      || !booking.checkOut
+      || booking.checkOut <= booking.checkIn
+      || booking.checkIn <= new Date()
     ) {
       res.status(400);
-      throw new Error('Choose a valid future check-in date and a check-out date after check-in');
+      throw new Error('This booking request has an invalid or expired stay window');
     }
 
-    const property = await Property.findById(booking.property);
-    if (!property) {
-      res.status(404);
-      throw new Error('Property not found for this booking');
-    }
-    const room = booking.room
-      ? await Room.findOne({ _id: booking.room, property: property._id })
-      : null;
-    const { rate, amount } = calculateRentalPrice({
-      property,
-      room,
-      billingUnit: booking.billingUnit || 'month',
-      checkIn: checkInDate,
-      checkOut: checkOutDate
-    });
-    booking.checkIn = checkInDate;
-    booking.checkOut = checkOutDate;
-    booking.totalPrice = amount;
-    booking.amountPaid = 0;
-    booking.installmentRate = rate;
-    booking.nextPaymentAmount = booking.paymentPlan === 'installments' ? Math.min(rate, amount) : amount;
-    booking.nextPaymentDueAt = booking.paymentPlan === 'installments' ? checkInDate : undefined;
-    booking.paymentStatus = 'unpaid';
   }
 
   booking.status = status;
   await booking.save();
+  if (status === 'rejected') {
+    await Property.updateOne(
+      { _id: booking.property },
+      { $pull: { activeReservations: { booking: booking._id } } }
+    );
+  }
   res.json(booking);
 };

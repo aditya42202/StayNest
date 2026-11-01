@@ -1,11 +1,90 @@
+import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
 import Room from '../models/Room.js';
-import { getRentalRate } from '../utils/rentalPricing.js';
+import { calculateRentalPrice } from '../utils/rentalPricing.js';
+import { hasRoomConflict, isValidStayWindow } from '../utils/bookingAvailability.js';
+
+const activeBookingStatuses = ['pending', 'approved'];
+
+const findBookingConflict = ({ propertyId, roomId, checkIn, checkOut }) => {
+  const query = {
+    property: propertyId,
+    status: { $in: activeBookingStatuses },
+    checkIn: { $lt: checkOut },
+    checkOut: { $gt: checkIn }
+  };
+  if (roomId) query.$or = [{ room: null }, { room: roomId }];
+  return Booking.exists(query);
+};
+
+const findReservationConflict = (reservations, roomId, checkIn, checkOut) => (
+  reservations.some((reservation) => (
+    reservation.checkIn < checkOut
+    && reservation.checkOut > checkIn
+    && hasRoomConflict(reservation, roomId)
+  ))
+);
+
+export const checkAvailability = async (req, res) => {
+  const { propertyId, roomId, billingUnit = 'month', checkIn, checkOut } = req.query;
+  if (!mongoose.isValidObjectId(propertyId) || (roomId && !mongoose.isValidObjectId(roomId))) {
+    res.status(400);
+    throw new Error('Choose a valid property and room');
+  }
+  if (!['hour', 'day', 'month', 'year'].includes(billingUnit)) {
+    res.status(400);
+    throw new Error('Choose a valid billing period');
+  }
+  const start = new Date(checkIn);
+  const end = new Date(checkOut);
+  if (!isValidStayWindow(start, end)) {
+    res.status(400);
+    throw new Error('Choose a future check-in and a check-out after check-in');
+  }
+
+  const property = await Property.findById(propertyId);
+  if (!property || !property.available) {
+    res.status(404);
+    throw new Error('Selected property is unavailable');
+  }
+  let room;
+  if (roomId) {
+    room = await Room.findOne({ _id: roomId, property: property._id, available: true });
+    if (!room) {
+      res.status(400);
+      throw new Error('Selected room is unavailable');
+    }
+  }
+
+  const [bookingConflict, latestProperty] = await Promise.all([
+    findBookingConflict({ propertyId: property._id, roomId: room?._id, checkIn: start, checkOut: end }),
+    Property.findById(property._id).select('+activeReservations')
+  ]);
+  const reservationConflict = findReservationConflict(
+    latestProperty?.activeReservations || [],
+    room?._id,
+    start,
+    end
+  );
+  const { rate, amount } = calculateRentalPrice({
+    property,
+    room,
+    billingUnit,
+    checkIn: start,
+    checkOut: end
+  });
+
+  res.json({ available: !bookingConflict && !reservationConflict, rate, amount, billingUnit });
+};
 
 export const createBooking = async (req, res) => {
-  const { propertyId, roomId, billingUnit = 'month', paymentPlan = 'upfront' } = req.body;
+  const { propertyId, roomId, billingUnit = 'month', paymentPlan = 'upfront', checkIn, checkOut } = req.body;
 
+  if (!mongoose.isValidObjectId(propertyId) || (roomId && !mongoose.isValidObjectId(roomId))) {
+    res.status(400);
+    throw new Error('Choose a valid property and room');
+  }
   if (!['hour', 'day', 'month', 'year'].includes(billingUnit)) {
     res.status(400);
     throw new Error('Choose a valid billing period');
@@ -13,6 +92,12 @@ export const createBooking = async (req, res) => {
   if (!['upfront', 'installments'].includes(paymentPlan)) {
     res.status(400);
     throw new Error('Choose a valid payment plan');
+  }
+  const start = new Date(checkIn);
+  const end = new Date(checkOut);
+  if (!isValidStayWindow(start, end)) {
+    res.status(400);
+    throw new Error('Choose a future check-in and a check-out after check-in');
   }
 
   const property = await Property.findById(propertyId);
@@ -34,22 +119,90 @@ export const createBooking = async (req, res) => {
     }
   }
 
-  const rate = getRentalRate(property, room, billingUnit);
-  const booking = await Booking.create({
+  const [bookingConflict, latestProperty] = await Promise.all([
+    findBookingConflict({ propertyId: property._id, roomId: room?._id, checkIn: start, checkOut: end }),
+    Property.findById(property._id).select('+activeReservations')
+  ]);
+  if (
+    bookingConflict
+    || findReservationConflict(latestProperty?.activeReservations || [], room?._id, start, end)
+  ) {
+    res.status(409);
+    throw new Error('The selected dates are no longer available');
+  }
+
+  let price;
+  try {
+    price = calculateRentalPrice({ property, room, billingUnit, checkIn: start, checkOut: end });
+  } catch (error) {
+    res.status(400);
+    throw error;
+  }
+
+  const booking = new Booking({
     property: property._id,
     room: room?._id,
     student: req.user._id,
     owner: property.owner,
+    checkIn: start,
+    checkOut: end,
     billingUnit,
     paymentPlan,
-    totalPrice: rate,
+    totalPrice: price.amount,
     amountPaid: 0,
-    installmentRate: rate,
-    nextPaymentAmount: rate,
+    installmentRate: price.rate,
+    nextPaymentAmount: paymentPlan === 'installments' ? Math.min(price.rate, price.amount) : price.amount,
+    nextPaymentDueAt: paymentPlan === 'installments' ? start : undefined,
     paymentStatus: 'unpaid'
   });
 
-  res.status(201).json({ booking, message: 'Booking request sent to the property owner' });
+  const reservationQuery = {
+    _id: property._id,
+    available: true,
+    activeReservations: {
+      $not: {
+        $elemMatch: {
+          checkIn: { $lt: end },
+          checkOut: { $gt: start },
+          ...(room ? { $or: [{ room: null }, { room: room._id }] } : {})
+        }
+      }
+    }
+  };
+  const reservedProperty = await Property.findOneAndUpdate(
+    reservationQuery,
+    {
+      $push: {
+        activeReservations: {
+          booking: booking._id,
+          room: room?._id || null,
+          checkIn: start,
+          checkOut: end
+        }
+      }
+    },
+    { new: true, projection: { _id: 1 } }
+  );
+  if (!reservedProperty) {
+    res.status(409);
+    throw new Error('The selected dates are no longer available');
+  }
+
+  try {
+    await booking.save();
+  } catch (error) {
+    await Property.updateOne(
+      { _id: property._id },
+      { $pull: { activeReservations: { booking: booking._id } } }
+    );
+    throw error;
+  }
+
+  res.status(201).json({
+    booking,
+    message: 'Booking request sent to the property owner',
+    quote: { rate: price.rate, amount: price.amount, billingUnit }
+  });
 };
 
 export const getMyBookings = async (req, res) => {
@@ -101,6 +254,10 @@ export const updateBookingStatus = async (req, res) => {
   }
 
   const requestedStatus = req.body.status;
+  if (!['approved', 'rejected', 'cancelled'].includes(requestedStatus)) {
+    res.status(400);
+    throw new Error('Choose a valid booking status');
+  }
   const role = req.user.role === 'student' ? 'user' : req.user.role;
   const isTenant = booking.student.toString() === req.user._id.toString();
   const isOwner = booking.owner.toString() === req.user._id.toString();
@@ -140,6 +297,12 @@ export const updateBookingStatus = async (req, res) => {
   booking.status = requestedStatus || booking.status;
   if (booking.status === 'cancelled' && booking.paymentStatus !== 'unpaid') booking.paymentStatus = 'refunded';
   await booking.save();
+  if (['cancelled', 'rejected'].includes(booking.status)) {
+    await Property.updateOne(
+      { _id: booking.property },
+      { $pull: { activeReservations: { booking: booking._id } } }
+    );
+  }
 
   res.json(booking);
 };

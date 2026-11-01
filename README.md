@@ -42,3 +42,11 @@ Owners can set monthly, daily, and hourly rent rates. If daily/hourly rates are 
 Admin signup is restricted to the comma-separated email addresses in the backend-only `ADMIN_SIGNUP_EMAILS` environment variable. Tenant and owner signup do not require an allowlisted email.
 
 Password recovery requires the backend email settings (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASS`). Set `CLIENT_URL` to the frontend URL so reset links open the deployed app; `FRONTEND_URL` can be used to override it. Reset links expire after 15 minutes and can only be used once.
+
+### Stay search and booking
+
+Property categories include hotels, hostels, PGs, student rooms, homestays, guest houses, apartments, shared rooms, hourly stays, one-day stays, and monthly rentals. Search supports destination, dates, guests, accommodation category, billing period, amenities, verified listings, minimum rating, and budget.
+
+Guests select check-in and check-out before submitting a request. The API calculates the quote from the selected duration and rates, checks for overlapping pending or approved stays, and atomically reserves the property/room window before creating the booking. Rejected and cancelled requests release their reservation. MongoDB serializes the reservation update on the property document, so concurrent booking requests for the same window cannot both reserve it. Reservation internals are excluded from public property responses. The quote is retained when the owner approves, so a later price edit cannot silently change the guest's requested total.
+
+The existing Stripe Checkout integration remains the configured payment provider; payment completion is verified by Stripe webhooks or a backend session lookup. Razorpay, student roommate matching, tourist services, and extended booking lifecycle workflows are not part of this implementation phase.

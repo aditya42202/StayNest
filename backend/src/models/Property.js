@@ -4,7 +4,27 @@ const propertySchema = new mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   title: { type: String, required: true, trim: true },
   description: { type: String, required: true },
-  category: { type: String, enum: ['boys pg', 'girls pg', 'hostel', 'shared room', 'private room', 'flat', 'house'], required: true },
+  category: {
+    type: String,
+    enum: [
+      'boys pg',
+      'girls pg',
+      'hostel',
+      'shared room',
+      'private room',
+      'flat',
+      'house',
+      'hotel',
+      'homestay',
+      'guest house',
+      'apartment',
+      'student room',
+      'hourly stay room',
+      'one-day stay room',
+      'monthly rental property'
+    ],
+    required: true
+  },
   type: { type: String, default: 'PG' },
   city: { type: String, required: true },
   area: { type: String, required: true },
@@ -18,6 +38,15 @@ const propertySchema = new mongoose.Schema({
   images: [{ type: String }],
   videos: [{ type: String }],
   rooms: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Room' }],
+  activeReservations: {
+    type: [{
+      booking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', required: true },
+      room: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', default: null },
+      checkIn: { type: Date, required: true },
+      checkOut: { type: Date, required: true }
+    }],
+    select: false
+  },
   amenities: [{ type: String }],
   mapLocation: {
     lat: { type: Number },
@@ -32,6 +61,7 @@ const propertySchema = new mongoose.Schema({
 });
 
 propertySchema.index({ title: 'text', description: 'text', city: 'text', area: 'text', college: 'text', landmark: 'text' });
+propertySchema.index({ city: 1, category: 1, rent: 1, available: 1 });
 
 const Property = mongoose.model('Property', propertySchema);
 export default Property;

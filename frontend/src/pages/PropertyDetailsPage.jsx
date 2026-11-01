@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import apiClient from '../api/apiClient.js';
-import { addToWishlist, createBooking, getWishlist, removeFromWishlist } from '../api/propertyApi.js';
+import { addToWishlist, checkBookingAvailability, createBooking, getWishlist, removeFromWishlist } from '../api/propertyApi.js';
+
+const dateTimeInputValue = (date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return localDate.toISOString().slice(0, 16);
+};
 
 const PropertyDetailsPage = () => {
   const { id } = useParams();
@@ -15,8 +20,10 @@ const PropertyDetailsPage = () => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistError, setWishlistError] = useState('');
   const [bookingOpen, setBookingOpen] = useState(false);
-  const [bookingDates, setBookingDates] = useState({ roomId: '', billingUnit: 'month', paymentPlan: 'upfront' });
+  const [bookingDates, setBookingDates] = useState({ roomId: '', billingUnit: 'month', paymentPlan: 'upfront', checkIn: '', checkOut: '' });
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availability, setAvailability] = useState(null);
   const [bookingMessage, setBookingMessage] = useState('');
   const [bookingError, setBookingError] = useState('');
   const [reviewRating, setReviewRating] = useState('5');
@@ -133,6 +140,36 @@ const PropertyDetailsPage = () => {
     setBookingOpen((open) => !open);
   };
 
+  const handleBookingDateChange = (event) => {
+    setBookingDates((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+      ...(event.target.name === 'checkIn' && current.checkOut <= event.target.value ? { checkOut: '' } : {})
+    }));
+    setAvailability(null);
+    setBookingError('');
+  };
+
+  const handleAvailabilityCheck = async () => {
+    setAvailabilityLoading(true);
+    setBookingError('');
+    setAvailability(null);
+    try {
+      const { data } = await checkBookingAvailability({
+        propertyId: id,
+        roomId: bookingDates.roomId || undefined,
+        billingUnit: bookingDates.billingUnit,
+        checkIn: new Date(bookingDates.checkIn).toISOString(),
+        checkOut: new Date(bookingDates.checkOut).toISOString()
+      });
+      setAvailability(data);
+    } catch (requestError) {
+      setBookingError(requestError.response?.data?.message || 'Unable to check availability. Please try again.');
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
   const handleBookingSubmit = async (event) => {
     event.preventDefault();
     setBookingLoading(true);
@@ -144,11 +181,14 @@ const PropertyDetailsPage = () => {
         propertyId: id,
         roomId: bookingDates.roomId || undefined,
         billingUnit: bookingDates.billingUnit,
-        paymentPlan: bookingDates.paymentPlan
+        paymentPlan: bookingDates.paymentPlan,
+        checkIn: new Date(bookingDates.checkIn).toISOString(),
+        checkOut: new Date(bookingDates.checkOut).toISOString()
       });
       setBookingMessage(data.message || 'Booking request sent to the property owner.');
       setBookingOpen(false);
-      setBookingDates({ roomId: '', billingUnit: 'month', paymentPlan: 'upfront' });
+      setBookingDates({ roomId: '', billingUnit: 'month', paymentPlan: 'upfront', checkIn: '', checkOut: '' });
+      setAvailability(null);
     } catch (requestError) {
       setBookingError(requestError.response?.data?.message || 'Unable to send your booking request. Please try again.');
     } finally {
@@ -222,7 +262,7 @@ const PropertyDetailsPage = () => {
             </div>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              {['WiFi', 'Food', 'Laundry', 'CCTV', 'Parking', 'Attached Bathroom', 'Furnished'].map((item) => (
+              {(property.amenities || []).map((item) => (
                 <span key={item} className="rounded-3xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-slate-300">{item}</span>
               ))}
             </div>
@@ -240,26 +280,22 @@ const PropertyDetailsPage = () => {
             <div className="mt-6 space-y-3">
               <p className="text-lg font-semibold text-white">{property.owner?.name || 'Owner details unavailable'}</p>
               <p className="text-slate-400">{property.verified ? 'Verified Owner' : 'Verification pending'}</p>
-              {property.owner?.email && <a className="block text-slate-300 hover:text-white" href={`mailto:${property.owner.email}`}>{property.owner.email}</a>}
-              {property.owner?.phone && <a className="block text-slate-300 hover:text-white" href={`tel:${property.owner.phone}`}>{property.owner.phone}</a>}
-              <a href={`mailto:${property.owner?.email || ''}?subject=${encodeURIComponent(`Question about ${property.title}`)}`} className="mt-6 block w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:opacity-95">
-                Chat with Owner
-              </a>
+              <p className="text-sm leading-6 text-slate-400">Owner contact details stay private. Send a booking request to share your stay dates with the owner.</p>
             </div>
           </div>
 
           <div className="rounded-[32px] bg-slate-900/90 p-8 shadow-glass">
             <h2 className="text-2xl font-semibold">Nearby Places</h2>
             <div className="mt-6 space-y-4 text-slate-300">
-              {['College • 1.2 km', 'Metro Station • 850 m', 'Bus Stand • 1.4 km', 'Hospital • 2.1 km'].map((item) => (
-                <div key={item} className="rounded-3xl border border-white/10 bg-slate-950/80 px-4 py-4">{item}</div>
-              ))}
+              {property.college && <div className="rounded-3xl border border-white/10 bg-slate-950/80 px-4 py-4">{property.college}</div>}
+              {property.landmark && <div className="rounded-3xl border border-white/10 bg-slate-950/80 px-4 py-4">{property.landmark}</div>}
+              {!property.college && !property.landmark && <p className="text-slate-400">Nearby landmark details have not been provided.</p>}
             </div>
           </div>
 
           <div className="rounded-[32px] bg-gradient-to-br from-blue-500 to-purple-600 p-8 text-white shadow-glass">
             <h2 className="text-2xl font-semibold">Book Now</h2>
-            <p className="mt-4 text-slate-100">Send a booking request to the owner. The estimated price is charged in 30-day periods.</p>
+            <p className="mt-4 text-slate-100">Choose your stay dates to check availability and see the full price before requesting a booking.</p>
             <div className="mt-6 space-y-3">
               <button
                 type="button"
@@ -288,7 +324,10 @@ const PropertyDetailsPage = () => {
                     Room
                     <select
                       value={bookingDates.roomId}
-                      onChange={(event) => setBookingDates((current) => ({ ...current, roomId: event.target.value }))}
+                      onChange={(event) => {
+                        setBookingDates((current) => ({ ...current, roomId: event.target.value }));
+                        setAvailability(null);
+                      }}
                       className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
                     >
                       <option value="">Property booking (no specific room)</option>
@@ -299,10 +338,37 @@ const PropertyDetailsPage = () => {
                   </label>
                 )}
                 <label className="block text-sm text-white">
+                  Check-in
+                  <input
+                    name="checkIn"
+                    type="datetime-local"
+                    min={dateTimeInputValue(new Date())}
+                    value={bookingDates.checkIn}
+                    onChange={handleBookingDateChange}
+                    required
+                    className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
+                  />
+                </label>
+                <label className="block text-sm text-white">
+                  Check-out
+                  <input
+                    name="checkOut"
+                    type="datetime-local"
+                    min={bookingDates.checkIn || dateTimeInputValue(new Date())}
+                    value={bookingDates.checkOut}
+                    onChange={handleBookingDateChange}
+                    required
+                    className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
+                  />
+                </label>
+                <label className="block text-sm text-white">
                   Billing period
                   <select
                     value={bookingDates.billingUnit}
-                    onChange={(event) => setBookingDates((current) => ({ ...current, billingUnit: event.target.value }))}
+                    onChange={(event) => {
+                      setBookingDates((current) => ({ ...current, billingUnit: event.target.value }));
+                      setAvailability(null);
+                    }}
                     className="mt-2 w-full rounded-2xl border border-white/20 bg-slate-950 px-4 py-3 text-white"
                   >
                     <option value="hour">Hourly · ₹{hourlyRate.toFixed(2)}/hour</option>
@@ -322,8 +388,18 @@ const PropertyDetailsPage = () => {
                     <option value="installments">Pay in manual installments</option>
                   </select>
                 </label>
-                <p className="text-sm text-white">The owner confirms your exact start/end time. Rent is calculated from that duration using the selected rate. Installments are paid manually when due.</p>
-                <button type="submit" disabled={bookingLoading} className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-blue-700 disabled:cursor-wait disabled:opacity-60">
+                <button type="button" onClick={handleAvailabilityCheck} disabled={availabilityLoading || !bookingDates.checkIn || !bookingDates.checkOut} className="w-full rounded-2xl border border-white/30 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+                  {availabilityLoading ? 'Checking dates...' : 'Check availability and price'}
+                </button>
+                {availability && (
+                  <p role={availability.available ? 'status' : 'alert'} className={`rounded-2xl p-3 text-sm ${availability.available ? 'bg-emerald-500/20 text-emerald-100' : 'bg-rose-500/20 text-rose-100'}`}>
+                    {availability.available
+                      ? `Available · Total ₹${availability.amount.toFixed(2)} for your stay`
+                      : 'These dates are not available. Choose different dates.'}
+                  </p>
+                )}
+                <p className="text-sm text-white">The server recalculates the total and checks availability again when you submit. Installments, if selected, are paid manually when due.</p>
+                <button type="submit" disabled={bookingLoading || !availability?.available} className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-blue-700 disabled:cursor-wait disabled:opacity-60">
                   {bookingLoading ? 'Sending request...' : 'Send booking request'}
                 </button>
                 <button type="button" onClick={() => setBookingOpen(false)} className="w-full py-2 text-sm text-white/80 hover:text-white">Cancel</button>

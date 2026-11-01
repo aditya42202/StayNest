@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   createBooking,
+  checkAvailability,
   getMyBookings,
   getBookingById,
   updateBookingStatus,
@@ -11,6 +12,7 @@ import { protect, authorize } from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 router.post('/', protect, authorize('user'), createBooking);
+router.get('/availability', checkAvailability);
 router.get('/me', protect, getMyBookings);
 router.get('/owner', protect, authorize('owner', 'admin'), getOwnerBookings);
 router.get('/:id', protect, getBookingById);

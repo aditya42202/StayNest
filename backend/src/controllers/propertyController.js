@@ -2,6 +2,18 @@ import Property from '../models/Property.js';
 import Booking from '../models/Booking.js';
 import Review from '../models/Review.js';
 import User from '../models/User.js';
+import { hasRoomConflict, intervalsOverlap, isValidStayWindow } from '../utils/bookingAvailability.js';
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const rateForUnit = (property, room, billingUnit) => {
+  const monthlyRate = Number(room?.price || property.rent);
+  const dailyRate = Number(property.rentPerDay || monthlyRate / 30);
+  if (billingUnit === 'hour') return Number(property.rentPerHour || dailyRate / 24);
+  if (billingUnit === 'day') return dailyRate;
+  if (billingUnit === 'year') return monthlyRate * 12;
+  return monthlyRate;
+};
 
 export const getProperties = async (req, res) => {
   const page = Number(req.query.page) || 1;
@@ -21,7 +33,7 @@ export const getProperties = async (req, res) => {
 
   const total = await Property.countDocuments(query);
   const properties = await Property.find(query)
-    .populate('owner', 'name email phone')
+    .populate('owner', 'name')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -30,26 +42,128 @@ export const getProperties = async (req, res) => {
 };
 
 export const searchProperties = async (req, res) => {
-  const { q, city, area, college, category, budget } = req.query;
-  const query = { available: true };
+  const {
+    q, city, area, college, category, budget, minPrice, maxPrice, billingUnit = 'month',
+    amenities, verified, minRating, checkIn, checkOut, guests, roomCount
+  } = req.query;
+  if (!['hour', 'day', 'month', 'year'].includes(billingUnit)) {
+    res.status(400);
+    throw new Error('Choose a valid billing period');
+  }
+  if (Boolean(checkIn) !== Boolean(checkOut)) {
+    res.status(400);
+    throw new Error('Provide both check-in and check-out dates');
+  }
+  const start = checkIn ? new Date(checkIn) : null;
+  const end = checkOut ? new Date(checkOut) : null;
+  if (start && !isValidStayWindow(start, end)) {
+    res.status(400);
+    throw new Error('Choose a future check-in and a check-out after check-in');
+  }
 
+  const query = { available: true };
   if (q) query.$text = { $search: q };
-  if (city) query.city = new RegExp(`^${city}$`, 'i');
-  if (area) query.area = new RegExp(`^${area}$`, 'i');
-  if (college) query.college = new RegExp(`^${college}$`, 'i');
-  if (category) query.category = { $regex: category, $options: 'i' };
-  if (budget) {
-    const budgetValue = Number(budget);
-    if (!isNaN(budgetValue)) {
-      query.rent = { $lte: budgetValue };
+  if (city) query.city = new RegExp(`^${escapeRegex(city.trim())}$`, 'i');
+  if (area) query.area = new RegExp(escapeRegex(area.trim()), 'i');
+  if (college) query.college = new RegExp(escapeRegex(college.trim()), 'i');
+  if (category) query.category = new RegExp(`^${escapeRegex(category.trim())}$`, 'i');
+  if (verified === 'true') query.verified = true;
+  if (verified === 'false') query.verified = false;
+  const ratingFloor = minRating === undefined || minRating === '' ? undefined : Number(minRating);
+  if (ratingFloor !== undefined) {
+    if (!Number.isFinite(ratingFloor) || ratingFloor < 0 || ratingFloor > 5) {
+      res.status(400);
+      throw new Error('Minimum rating must be between 0 and 5');
     }
+    query.rating = { $gte: ratingFloor };
+  }
+  const requestedAmenities = amenities
+    ? String(amenities).split(',').map((item) => item.trim()).filter(Boolean)
+    : [];
+  if (requestedAmenities.length) {
+    query.amenities = {
+      $all: requestedAmenities.map((item) => new RegExp(`^${escapeRegex(item)}$`, 'i'))
+    };
+  }
+  const guestCount = guests === undefined || guests === '' ? undefined : Number(guests);
+  if (guestCount !== undefined && (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 20)) {
+    res.status(400);
+    throw new Error('Guest count must be between 1 and 20');
+  }
+  const requestedRoomCount = roomCount === undefined || roomCount === '' ? 1 : Number(roomCount);
+  if (!Number.isInteger(requestedRoomCount) || requestedRoomCount < 1 || requestedRoomCount > 10) {
+    res.status(400);
+    throw new Error('Room count must be between 1 and 10');
+  }
+
+  const minimum = minPrice === undefined || minPrice === '' ? undefined : Number(minPrice);
+  const maximum = maxPrice === undefined
+    ? (budget === undefined || budget === '' ? undefined : Number(budget))
+    : Number(maxPrice);
+  if (
+    (minimum !== undefined && (!Number.isFinite(minimum) || minimum < 0))
+    || (maximum !== undefined && (!Number.isFinite(maximum) || maximum < 0))
+    || (minimum !== undefined && maximum !== undefined && minimum > maximum)
+  ) {
+    res.status(400);
+    throw new Error('Enter a valid minimum and maximum price');
   }
 
   const properties = await Property.find(query)
-    .populate('owner', 'name email phone')
-    .limit(30);
+    .populate('owner', 'name')
+    .populate('rooms')
+    .select('+activeReservations')
+    .sort({ verified: -1, rating: -1, createdAt: -1 })
+    .limit(100);
 
-  res.json({ properties });
+  let bookingsByProperty = new Map();
+  if (start) {
+    const activeBookings = await Booking.find({
+      property: { $in: properties.map((property) => property._id) },
+      status: { $in: ['pending', 'approved'] },
+      checkIn: { $lt: end },
+      checkOut: { $gt: start }
+    }).select('property room checkIn checkOut');
+    bookingsByProperty = activeBookings.reduce((grouped, booking) => {
+      const propertyId = booking.property.toString();
+      grouped.set(propertyId, [...(grouped.get(propertyId) || []), booking]);
+      return grouped;
+    }, new Map());
+  }
+
+  const filteredProperties = properties.filter((property) => {
+    const applicableRooms = property.rooms.length
+      ? property.rooms.filter((room) => room.available)
+      : [null];
+    if (applicableRooms.length < requestedRoomCount) return false;
+
+    const existingReservations = [
+      ...property.activeReservations,
+      ...(bookingsByProperty.get(property._id.toString()) || [])
+    ];
+    let searchRate;
+    let matchingRoomCount = 0;
+    applicableRooms.forEach((room) => {
+      if (guestCount && room && (room.occupantLimit || 1) < guestCount) return false;
+      if (start && existingReservations.some((reservation) => (
+        intervalsOverlap(reservation.checkIn, reservation.checkOut, start, end)
+        && hasRoomConflict(reservation, room?._id)
+      ))) return;
+
+      const rate = rateForUnit(property, room, billingUnit);
+      const matchesPrice = Number.isFinite(rate)
+        && (minimum === undefined || rate >= minimum)
+        && (maximum === undefined || rate <= maximum);
+      if (matchesPrice) {
+        matchingRoomCount += 1;
+        if (searchRate === undefined || rate < searchRate) searchRate = rate;
+      }
+    });
+    if (matchingRoomCount >= requestedRoomCount) property.set('searchRate', searchRate);
+    return matchingRoomCount >= requestedRoomCount;
+  });
+
+  res.json({ properties: filteredProperties.slice(0, 30), total: filteredProperties.length, billingUnit });
 };
 
 export const getFeaturedProperties = async (req, res) => {
@@ -62,7 +176,7 @@ export const getFeaturedProperties = async (req, res) => {
 
 export const getPropertyById = async (req, res) => {
   const property = await Property.findById(req.params.id)
-    .populate('owner', 'name email phone')
+    .populate('owner', 'name')
     .populate('rooms')
     .populate({ path: 'reviews', model: Review });
 

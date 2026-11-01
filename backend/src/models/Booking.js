@@ -20,5 +20,9 @@ const bookingSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+bookingSchema.index({ property: 1, room: 1, status: 1, checkIn: 1, checkOut: 1 });
+bookingSchema.index({ student: 1, createdAt: -1 });
+bookingSchema.index({ owner: 1, status: 1, createdAt: -1 });
+
 const Booking = mongoose.model('Booking', bookingSchema);
 export default Booking;
