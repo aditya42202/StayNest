@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'crypto';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
+import PendingRegistration from '../models/PendingRegistration.js';
 import RefreshToken from '../models/RefreshToken.js';
 import {
   REFRESH_COOKIE_NAME,
@@ -112,6 +113,18 @@ export const registerUser = async (req, res) => {
     res.status(409);
     throw new Error('Email already registered. Sign in to request a new verification email if your account is unverified.');
   }
+  const pendingRegistration = await PendingRegistration.findOne({
+    email: normalizedEmail,
+    expiresAt: { $gt: new Date() }
+  });
+  if (pendingRegistration) {
+    res.status(409);
+    throw new Error('Email verification is pending. Open the verification page to request a new email.');
+  }
+  await PendingRegistration.deleteOne({
+    email: normalizedEmail,
+    expiresAt: { $lte: new Date() }
+  });
   if (!isEmailServiceConfigured()) {
     res.status(503);
     throw new Error('Email verification is not configured. Please try again later.');
@@ -120,24 +133,24 @@ export const registerUser = async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, saltRounds);
   const verificationToken = randomBytes(32).toString('hex');
   const verificationTokenHash = createHash('sha256').update(verificationToken).digest('hex');
-  let user;
+  let pending;
   try {
-    user = await User.create({
+    pending = await PendingRegistration.create({
       name: normalizedName,
       email: normalizedEmail,
       password: hashedPassword,
       role: requestedRole,
-      verified: false,
-      emailVerificationRequired: true,
-      emailVerificationCodeHash: verificationTokenHash,
-      emailVerificationExpires: new Date(Date.now() + verificationLinkLifetimeMs),
-      emailVerificationResendAfter: new Date(Date.now() + verificationResendCooldownMs),
-      emailVerificationAttempts: 0
+      verificationTokenHash,
+      expiresAt: new Date(Date.now() + verificationLinkLifetimeMs),
+      resendAfter: new Date(Date.now() + verificationResendCooldownMs)
     });
   } catch (error) {
     if (error?.code === 11000) {
+      const registeredUser = await User.exists({ email: normalizedEmail });
       res.status(409);
-      throw new Error('Email already registered. Sign in to request a new verification email if your account is unverified.');
+      throw new Error(registeredUser
+        ? 'Email already registered. Sign in to request a new verification email if your account is unverified.'
+        : 'Email verification is pending. Open the verification page to request a new email.');
     }
     throw error;
   }
@@ -151,12 +164,13 @@ export const registerUser = async (req, res) => {
   } catch (emailError) {
     logEmailDeliveryFailure('Verification email delivery', emailError);
     res.status(503);
-    throw new Error('Your account was created, but the verification email could not be sent. Please wait briefly, then request a new link from the verification page.');
+    throw new Error('Your signup is pending email verification, but the email could not be delivered. Open the verification page to request a new link.');
   }
 
   res.status(201).json({
-    user: authUser(user),
-    verificationRequired: true
+    message: 'Signup received. Verify your email to finish creating your account.',
+    verificationRequired: true,
+    email: pending.email
   });
 };
 
@@ -187,6 +201,16 @@ export const loginUser = async (req, res) => {
       user: authUser(user),
       token
     });
+  }
+  if (!user) {
+    const pending = await PendingRegistration.findOne({
+      email: normalizedEmail,
+      expiresAt: { $gt: new Date() }
+    }).select('+password');
+    if (pending && await bcrypt.compare(password, pending.password)) {
+      res.status(403);
+      throw new Error('Please verify your email address before signing in');
+    }
   }
 
   res.status(401);
@@ -293,6 +317,46 @@ export const verifyEmail = async (req, res) => {
     }
 
     const tokenHash = createHash('sha256').update(token).digest('hex');
+    const pendingRegistration = await PendingRegistration.findOneAndUpdate(
+      {
+        verificationTokenHash: tokenHash,
+        expiresAt: { $gt: new Date() },
+        verificationClaimed: { $ne: true }
+      },
+      { $set: { verificationClaimed: true } },
+      { new: true, runValidators: true }
+    ).select('+password +verificationTokenHash');
+
+    if (pendingRegistration) {
+      try {
+        await User.create({
+          name: pendingRegistration.name,
+          email: pendingRegistration.email,
+          password: pendingRegistration.password,
+          role: pendingRegistration.role,
+          verified: true,
+          emailVerificationRequired: false
+        });
+      } catch (error) {
+        if (error?.code === 11000) {
+          await PendingRegistration.deleteOne({ _id: pendingRegistration._id });
+          res.status(400);
+          throw new Error('Verification link is invalid, expired, or has already been used');
+        }
+        await PendingRegistration.updateOne(
+          { _id: pendingRegistration._id, verificationClaimed: true },
+          { $set: { verificationClaimed: false } }
+        );
+        throw error;
+      }
+
+      await PendingRegistration.deleteOne({
+        _id: pendingRegistration._id,
+        verificationTokenHash: tokenHash
+      });
+      return res.json({ message: 'Email verified successfully. Your account is ready to sign in.' });
+    }
+
     const user = await User.findOneAndUpdate(
       {
         emailVerificationCodeHash: tokenHash,
@@ -400,6 +464,36 @@ export const resendVerificationEmail = async (req, res) => {
       logEmailDeliveryFailure('Verification email delivery', emailError);
       res.status(503);
       throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
+    }
+  } else {
+    const pendingToken = randomBytes(32).toString('hex');
+    const pendingRegistration = await PendingRegistration.findOneAndUpdate(
+      {
+        email,
+        resendAfter: { $lte: now },
+        verificationClaimed: { $ne: true }
+      },
+      {
+        $set: {
+          verificationTokenHash: createHash('sha256').update(pendingToken).digest('hex'),
+          expiresAt: new Date(now.getTime() + verificationLinkLifetimeMs),
+          resendAfter: new Date(now.getTime() + verificationResendCooldownMs)
+        }
+      },
+      { new: true, runValidators: true }
+    );
+    if (pendingRegistration) {
+      const verificationUrl = `${getClientUrl()}/verify-email?token=${pendingToken}`;
+      try {
+        await sendEmail({
+          to: email,
+          ...verificationEmail(verificationUrl)
+        });
+      } catch (emailError) {
+        logEmailDeliveryFailure('Verification email delivery', emailError);
+        res.status(503);
+        throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
+      }
     }
   }
 

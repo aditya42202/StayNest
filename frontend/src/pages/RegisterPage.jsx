@@ -8,6 +8,7 @@ const RegisterPage = () => {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user' });
   const [error, setError] = useState('');
   const [emailAlreadyRegistered, setEmailAlreadyRegistered] = useState(false);
+  const [emailVerificationPending, setEmailVerificationPending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e) => setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
@@ -17,6 +18,7 @@ const RegisterPage = () => {
     if (submitting) return;
     setError('');
     setEmailAlreadyRegistered(false);
+    setEmailVerificationPending(false);
     setSubmitting(true);
     try {
       const { data } = await apiClient.post('/auth/register', form);
@@ -41,7 +43,10 @@ const RegisterPage = () => {
     } catch (err) {
       const message = err.response?.data?.message || 'Registration failed';
       setEmailAlreadyRegistered(err.response?.status === 409);
-      if (message.includes('account was created')) {
+      setEmailVerificationPending(
+        err.response?.status === 409 && message.toLowerCase().includes('verification is pending')
+      );
+      if (message.toLowerCase().includes('signup is pending')) {
         navigate('/verify-email', {
           replace: true,
           state: { email: form.email, error: message, from: location.state?.from }
@@ -97,7 +102,12 @@ const RegisterPage = () => {
           {error && <p className="text-sm text-rose-400">{error}</p>}
           {emailAlreadyRegistered && (
             <Link to="/login" state={{ email: form.email, from: location.state?.from }} className="block text-sm text-blue-300 underline">
-              Sign in or resend your verification email
+              Sign in to your existing account
+            </Link>
+          )}
+          {emailVerificationPending && (
+            <Link to="/verify-email" state={{ email: form.email, from: location.state?.from }} className="block text-sm text-blue-300 underline">
+              Continue verifying this email
             </Link>
           )}
           <button type="submit" disabled={submitting} className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95 disabled:cursor-wait disabled:opacity-60">{submitting ? 'Creating account...' : 'Register'}</button>

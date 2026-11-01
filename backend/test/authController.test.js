@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import RefreshToken from '../src/models/RefreshToken.js';
+import PendingRegistration from '../src/models/PendingRegistration.js';
 import User from '../src/models/User.js';
 import {
   loginUser,
@@ -65,20 +66,16 @@ const createSmtpMock = (t, sendMail) => {
 
 test('signup normalizes input, saves a password hash, and sends a hashed-token link', async (t) => {
   setAuthEnvironment(t);
-  let createdUser;
+  let createdPending;
   let sentMessage;
-  const user = {
-    _id: '012345678901234567890123',
-    name: 'Taylor',
-    email: 'taylor@gmail.com',
-    role: 'user',
-    verified: false
-  };
   t.mock.method(User, 'findOne', async () => null);
-  t.mock.method(User, 'create', async (data) => {
-    createdUser = data;
-    return { ...user, ...data, _id: user._id };
+  t.mock.method(PendingRegistration, 'findOne', async () => null);
+  t.mock.method(PendingRegistration, 'deleteOne', async () => ({ deletedCount: 0 }));
+  t.mock.method(PendingRegistration, 'create', async (data) => {
+    createdPending = data;
+    return data;
   });
+  const createUser = t.mock.method(User, 'create', async () => assert.fail('User must not exist before verification'));
   createSmtpMock(t, async (message) => { sentMessage = message; });
   const response = createResponse();
 
@@ -92,25 +89,25 @@ test('signup normalizes input, saves a password hash, and sends a hashed-token l
 
   const token = sentMessage.text.match(/verify-email\?token=([a-f\d]{64})/i)?.[1];
   assert.ok(token);
-  assert.equal(createdUser.name, 'Taylor');
-  assert.equal(createdUser.email, 'taylor@gmail.com');
-  assert.notEqual(createdUser.password, 'secure-password');
-  assert.equal(await bcrypt.compare('secure-password', createdUser.password), true);
+  assert.equal(createdPending.name, 'Taylor');
+  assert.equal(createdPending.email, 'taylor@gmail.com');
+  assert.notEqual(createdPending.password, 'secure-password');
+  assert.equal(await bcrypt.compare('secure-password', createdPending.password), true);
   assert.equal(
-    createdUser.emailVerificationCodeHash,
+    createdPending.verificationTokenHash,
     createHash('sha256').update(token).digest('hex')
   );
   assert.match(sentMessage.html, /30 minutes/);
   assert.equal(response.statusCode, 201);
   assert.equal(response.body.verificationRequired, true);
-  assert.equal(response.body.user.password, undefined);
-  assert.equal(response.body.user.emailVerificationCodeHash, undefined);
+  assert.equal(response.body.user, undefined);
+  assert.equal(createUser.mock.callCount(), 0);
 });
 
 test('signup rejects invalid data and duplicate emails without creating another user', async (t) => {
   setAuthEnvironment(t);
   const findOne = t.mock.method(User, 'findOne', async () => ({ _id: 'existing' }));
-  const create = t.mock.method(User, 'create', async () => assert.fail('must not create a duplicate'));
+  const create = t.mock.method(PendingRegistration, 'create', async () => assert.fail('must not create a duplicate'));
   const response = createResponse();
 
   await assert.rejects(
@@ -134,15 +131,34 @@ test('signup rejects invalid data and duplicate emails without creating another 
   assert.equal(create.mock.callCount(), 0);
 });
 
-test('signup retains the unverified user and reports SMTP failure without logging the token', async (t) => {
+test('signup directs an existing pending address to verification without creating a user', async (t) => {
+  setAuthEnvironment(t);
+  t.mock.method(User, 'findOne', async () => null);
+  t.mock.method(PendingRegistration, 'findOne', async () => ({ email: 'person@gmail.com' }));
+  const create = t.mock.method(PendingRegistration, 'create', async () => assert.fail('must not create a second pending signup'));
+  const response = createResponse();
+
+  await assert.rejects(
+    registerUser({
+      body: { name: 'Person', email: 'person@gmail.com', password: 'secure-password' }
+    }, response),
+    /Email verification is pending/
+  );
+  assert.equal(response.statusCode, 409);
+  assert.equal(create.mock.callCount(), 0);
+});
+
+test('signup retains only a pending record and reports SMTP failure without logging the token', async (t) => {
   setAuthEnvironment(t);
   const logs = [];
   t.mock.method(console, 'error', (line) => logs.push(line));
-  let createdUser;
+  let createdPending;
   t.mock.method(User, 'findOne', async () => null);
-  t.mock.method(User, 'create', async (data) => {
-    createdUser = data;
-    return { ...data, _id: '012345678901234567890123' };
+  t.mock.method(PendingRegistration, 'findOne', async () => null);
+  t.mock.method(PendingRegistration, 'deleteOne', async () => ({ deletedCount: 0 }));
+  t.mock.method(PendingRegistration, 'create', async (data) => {
+    createdPending = data;
+    return data;
   });
   createSmtpMock(t, async () => {
     const error = new Error('SMTP authentication failed');
@@ -155,42 +171,70 @@ test('signup retains the unverified user and reports SMTP failure without loggin
     registerUser({
       body: { name: 'Taylor', email: 'taylor@gmail.com', password: 'secure-password' }
     }, response),
-    /account was created/
+    /signup is pending/
   );
 
   assert.equal(response.statusCode, 503);
-  assert.ok(createdUser);
-  assert.equal(createdUser.verified, false);
-  assert.match(createdUser.emailVerificationCodeHash, /^[a-f\d]{64}$/);
-  assert.equal(logs.join('\n').includes(createdUser.emailVerificationCodeHash), false);
+  assert.ok(createdPending);
+  assert.equal(createdPending.verified, undefined);
+  assert.match(createdPending.verificationTokenHash, /^[a-f\d]{64}$/);
+  assert.equal(logs.join('\n').includes(createdPending.verificationTokenHash), false);
   assert.equal(logs.join('\n').includes(process.env.EMAIL_PASS), false);
 });
 
 test('verification link is single-use and rejects invalid or expired tokens', async (t) => {
   const token = 'a'.repeat(64);
   const hash = createHash('sha256').update(token).digest('hex');
-  let consumed = false;
+  let pendingConsumed = false;
+  const pending = {
+    _id: 'pending-id',
+    name: 'Taylor',
+    email: 'taylor@gmail.com',
+    password: 'hashed-password',
+    role: 'user'
+  };
+  const findPending = t.mock.method(PendingRegistration, 'findOneAndUpdate', (query, update, options) => ({
+    select: async () => {
+      assert.equal(query.verificationTokenHash, hash);
+      assert.ok(query.expiresAt.$gt instanceof Date);
+      assert.equal(query.verificationClaimed.$ne, true);
+      assert.equal(update.$set.verificationClaimed, true);
+      assert.equal(options.new, true);
+      if (pendingConsumed) return null;
+      pendingConsumed = true;
+      return pending;
+    }
+  }));
+  const createUser = t.mock.method(User, 'create', async (data) => {
+    assert.equal(data.verified, true);
+    assert.equal(data.email, pending.email);
+    return data;
+  });
+  const deletePending = t.mock.method(PendingRegistration, 'deleteOne', async () => ({ deletedCount: 1 }));
+  t.mock.method(PendingRegistration, 'updateOne', async () => ({ modifiedCount: 1 }));
+  let legacyFindCalls = 0;
   const findOneAndUpdate = t.mock.method(User, 'findOneAndUpdate', async (query) => {
+    legacyFindCalls += 1;
     assert.equal(query.emailVerificationCodeHash, hash);
-    assert.ok(query.emailVerificationExpires.$gt instanceof Date);
-    if (consumed) return null;
-    consumed = true;
-    return { verified: true };
+    return null;
   });
 
   const success = createResponse();
   await verifyEmail({ body: { token } }, success);
-  assert.equal(success.body.message, 'Email verified successfully');
-  assert.equal(findOneAndUpdate.mock.callCount(), 1);
+  assert.match(success.body.message, /account is ready/);
+  assert.equal(createUser.mock.callCount(), 1);
+  assert.equal(deletePending.mock.callCount(), 1);
+  assert.equal(findOneAndUpdate.mock.callCount(), 0);
 
   const replay = createResponse();
   await assert.rejects(verifyEmail({ body: { token } }, replay), /invalid, expired, or has already been used/);
   assert.equal(replay.statusCode, 400);
+  assert.equal(legacyFindCalls, 1);
 
   const invalid = createResponse();
   await assert.rejects(verifyEmail({ body: { token: 'bad' } }, invalid), /invalid, expired, or has already been used/);
   assert.equal(invalid.statusCode, 400);
-  assert.equal(findOneAndUpdate.mock.callCount(), 2);
+  assert.equal(findPending.mock.callCount(), 2);
 });
 
 test('resend rotates the token atomically and sends only the generic response', async (t) => {
@@ -199,7 +243,8 @@ test('resend rotates the token atomically and sends only the generic response', 
   let update;
   let sentMessage;
   let resendCalls = 0;
-  t.mock.method(User, 'findOneAndUpdate', async (filter, changes) => {
+  t.mock.method(User, 'findOneAndUpdate', async () => null);
+  t.mock.method(PendingRegistration, 'findOneAndUpdate', async (filter, changes) => {
     resendCalls += 1;
     query = filter;
     update = changes;
@@ -213,11 +258,10 @@ test('resend rotates the token atomically and sends only the generic response', 
   const token = sentMessage.text.match(/verify-email\?token=([a-f\d]{64})/i)?.[1];
   assert.ok(token);
   assert.equal(query.email, 'person@gmail.com');
-  assert.equal(query.verified, false);
-  assert.equal(query.$or.length, 2);
-  assert.ok(query.$or[1].emailVerificationResendAfter.$lte instanceof Date);
+  assert.ok(query.resendAfter.$lte instanceof Date);
+  assert.equal(query.verificationClaimed.$ne, true);
   assert.equal(
-    update.$set.emailVerificationCodeHash,
+    update.$set.verificationTokenHash,
     createHash('sha256').update(token).digest('hex')
   );
   assert.equal(response.statusCode, 200);
@@ -243,8 +287,13 @@ test('login permits verified users and rejects unverified or invalid credentials
     verified: true,
     tokenVersion: 0
   };
+  let userFound = verifiedUser;
   t.mock.method(User, 'findOne', () => ({
-    select: async () => verifiedUser
+    select: async () => userFound
+  }));
+  let pendingFound = null;
+  t.mock.method(PendingRegistration, 'findOne', () => ({
+    select: async () => pendingFound
   }));
   t.mock.method(RefreshToken, 'create', async () => ({}));
   const success = createResponse();
@@ -259,10 +308,7 @@ test('login permits verified users and rejects unverified or invalid credentials
   assert.equal(success.cookieValue.options.httpOnly, true);
 
   const unverifiedResponse = createResponse();
-  t.mock.restoreAll();
-  t.mock.method(User, 'findOne', () => ({
-    select: async () => ({ ...verifiedUser, verified: false })
-  }));
+  userFound = { ...verifiedUser, verified: false };
   await assert.rejects(
     loginUser({
       body: { email: 'Taylor@gmail.com', password: 'secure-password' }
@@ -272,9 +318,20 @@ test('login permits verified users and rejects unverified or invalid credentials
   assert.equal(unverifiedResponse.statusCode, 403);
 
   const invalidResponse = createResponse();
-  t.mock.method(User, 'findOne', () => ({
-    select: async () => null
-  }));
+  userFound = null;
+  pendingFound = {
+    password: passwordHash
+  };
+  const pendingResponse = createResponse();
+  await assert.rejects(
+    loginUser({
+      body: { email: 'Taylor@gmail.com', password: 'secure-password' }
+    }, pendingResponse),
+    /verify your email/
+  );
+  assert.equal(pendingResponse.statusCode, 403);
+
+  pendingFound = null;
   await assert.rejects(
     loginUser({
       body: { email: 'Taylor@gmail.com', password: 'secure-password' }
