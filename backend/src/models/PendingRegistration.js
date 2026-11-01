@@ -7,7 +7,8 @@ const pendingRegistrationSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'student', 'owner', 'admin'], default: 'user' },
   verificationTokenHash: { type: String, required: true, select: false },
   verificationClaimed: { type: Boolean, default: false, select: false },
-  expiresAt: { type: Date, required: true, expires: 0 },
+  expiresAt: { type: Date, required: true },
+  purgeAt: { type: Date, required: true, expires: 0 },
   resendAfter: { type: Date, required: true }
 });
 

@@ -20,6 +20,12 @@ const setAuthEnvironment = (t) => {
     'EMAIL_USER',
     'EMAIL_PASS',
     'EMAIL_FROM',
+    'EMAIL_PROVIDER',
+    'SMTP_HOST',
+    'SMTP_PORT',
+    'SMTP_USER',
+    'SMTP_PASS',
+    'SMTP_SECURE',
     'FRONTEND_URL',
     'JWT_SECRET'
   ];
@@ -30,9 +36,15 @@ const setAuthEnvironment = (t) => {
     EMAIL_USER: 'sender@example.test',
     EMAIL_PASS: 'not-a-real-password',
     EMAIL_FROM: 'StayNest <sender@example.test>',
+    EMAIL_PROVIDER: '',
+    SMTP_HOST: '',
+    SMTP_PORT: '',
+    SMTP_USER: '',
+    SMTP_PASS: '',
     FRONTEND_URL: 'https://frontend.example.test',
     JWT_SECRET: 'test-secret-with-more-than-thirty-two-characters'
   });
+  delete process.env.SMTP_SECURE;
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];
@@ -179,7 +191,7 @@ test('signup retains only a pending record and reports SMTP failure without logg
     /signup is pending/
   );
 
-  assert.equal(response.statusCode, 503);
+  assert.equal(response.statusCode, 502);
   assert.ok(createdPending);
   assert.equal(createdPending.verified, undefined);
   assert.match(createdPending.verificationTokenHash, /^[a-f\d]{64}$/);
@@ -198,8 +210,13 @@ test('verification link is single-use and rejects invalid or expired tokens', as
     name: 'Taylor',
     email: 'taylor@gmail.com',
     password: 'hashed-password',
-    role: 'user'
+    role: 'user',
+    expiresAt: new Date(Date.now() + 60_000)
   };
+  t.mock.method(PendingRegistration, 'findOne', async () => ({
+    expiresAt: new Date(Date.now() + 60_000)
+  }));
+  t.mock.method(User, 'findOne', () => ({ select: async () => null }));
   const findPending = t.mock.method(PendingRegistration, 'findOneAndUpdate', (query, update, options) => ({
     select: async () => {
       assert.equal(query.verificationTokenHash, hash);
@@ -242,6 +259,24 @@ test('verification link is single-use and rejects invalid or expired tokens', as
   await assert.rejects(verifyEmail({ body: { token: 'bad' } }, invalid), /invalid, expired, or has already been used/);
   assert.equal(invalid.statusCode, 400);
   assert.equal(findPending.mock.callCount(), 2);
+});
+
+test('verification returns 410 for an expired but retained token', async (t) => {
+  const token = 'b'.repeat(64);
+  t.mock.method(PendingRegistration, 'findOne', async () => ({
+    expiresAt: new Date(Date.now() - 1)
+  }));
+  const claimToken = t.mock.method(
+    PendingRegistration,
+    'findOneAndUpdate',
+    async () => assert.fail('expired token must not be claimed')
+  );
+  const response = createResponse();
+
+  await assert.rejects(verifyEmail({ body: { token } }, response), /has expired/);
+
+  assert.equal(response.statusCode, 410);
+  assert.equal(claimToken.mock.callCount(), 0);
 });
 
 test('resend rotates the token atomically and sends only the generic response', async (t) => {
@@ -294,7 +329,11 @@ test('failed verification email releases the user resend cooldown', async (t) =>
   t.mock.method(PendingRegistration, 'findOneAndUpdate', async () => (
     assert.fail('must not fall back to a pending signup when an unverified user was found')
   ));
-  createSmtpMock(t, async () => { throw new Error('SMTP unavailable'); });
+  createSmtpMock(t, async () => {
+    const error = new Error('SMTP unavailable');
+    error.code = 'ETIMEDOUT';
+    throw error;
+  });
   const response = createResponse();
 
   await assert.rejects(
@@ -318,7 +357,11 @@ test('failed verification email releases the pending registration resend cooldow
     rollback = args;
     return { modifiedCount: 1 };
   });
-  createSmtpMock(t, async () => { throw new Error('SMTP unavailable'); });
+  createSmtpMock(t, async () => {
+    const error = new Error('SMTP unavailable');
+    error.code = 'ETIMEDOUT';
+    throw error;
+  });
   const response = createResponse();
 
   await assert.rejects(

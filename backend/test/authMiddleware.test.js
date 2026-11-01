@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
-import { authorize } from '../src/middleware/authMiddleware.js';
+import { authorize, protect } from '../src/middleware/authMiddleware.js';
+import User from '../src/models/User.js';
 import generateToken, { getJWTSecret } from '../src/utils/generateToken.js';
 import { canonicalRole, normalizeRole } from '../src/utils/roles.js';
 
@@ -31,6 +32,33 @@ test('JWT signing refuses missing or short secrets', () => {
   delete process.env.JWT_SECRET;
   assert.throws(() => getJWTSecret(), /at least 32 characters/);
   process.env.JWT_SECRET = secret;
+});
+
+test('protected routes reject users without a verified email', async (t) => {
+  process.env.JWT_SECRET = secret;
+  const token = generateToken({
+    _id: '012345678901234567890123',
+    role: 'user',
+    tokenVersion: 0
+  });
+  t.mock.method(User, 'findById', async () => ({
+    tokenVersion: 0,
+    verified: false,
+    emailVerificationRequired: false,
+    blocked: false
+  }));
+  const response = {
+    status(code) {
+      this.statusCode = code;
+      return this;
+    }
+  };
+
+  await assert.rejects(
+    protect({ headers: { authorization: `Bearer ${token}` } }, response, () => {}),
+    /verify your email address/
+  );
+  assert.equal(response.statusCode, 403);
 });
 
 test('role authorization normalizes legacy student accounts', () => {

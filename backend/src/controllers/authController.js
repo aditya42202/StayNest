@@ -19,7 +19,12 @@ import {
   matchesEmailVerificationCode,
   normalizeEmail
 } from '../utils/authSecurity.js';
-import { isEmailServiceConfigured, sendEmail } from '../utils/sendEmail.js';
+import {
+  isEmailServiceConfigured,
+  isTemporaryEmailFailure,
+  sendEmail,
+  sendVerificationEmail
+} from '../utils/sendEmail.js';
 import { canonicalRole, normalizeRole } from '../utils/roles.js';
 
 const saltRounds = 12;
@@ -51,12 +56,6 @@ const logEmailDeliveryFailure = (operation, error) => {
   if (Number.isInteger(error?.responseCode)) details.responseCode = error.responseCode;
   console.error(JSON.stringify({ event: operation, ...details }));
 };
-
-const verificationEmail = (verificationUrl) => ({
-  subject: 'Verify your StayNest AI account',
-  text: `Verify your email by opening this link within ${verificationTokenLifetimeMinutes} minutes:\n\n${verificationUrl}\n\nIf the link is unavailable, copy and paste the URL into your browser. If you did not create this account, you can ignore this email.`,
-  html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#172033"><h1>Verify your email</h1><p>Confirm your email address to finish creating your StayNest AI account.</p><p><a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Verify email</a></p><p>This link expires in ${verificationTokenLifetimeMinutes} minutes.</p><p>If the button does not work, copy and paste this URL into your browser:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p><p>If you did not create this account, you can ignore this email.</p></div>`
-});
 
 const getClientUrl = () => (
   (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173')
@@ -133,6 +132,7 @@ export const registerUser = async (req, res) => {
       role: requestedRole,
       verificationTokenHash,
       expiresAt: new Date(Date.now() + verificationLinkLifetimeMs),
+      purgeAt: new Date(Date.now() + verificationLinkLifetimeMs + 24 * 60 * 60 * 1000),
       resendAfter: new Date(Date.now() + verificationResendCooldownMs)
     });
   } catch (error) {
@@ -148,9 +148,10 @@ export const registerUser = async (req, res) => {
 
   const verificationUrl = `${getClientUrl()}/verify-email?token=${verificationToken}`;
   try {
-    await sendEmail({
+    await sendVerificationEmail({
       to: normalizedEmail,
-      ...verificationEmail(verificationUrl)
+      verificationUrl,
+      token: verificationToken
     });
   } catch (emailError) {
     await PendingRegistration.updateOne(
@@ -162,8 +163,10 @@ export const registerUser = async (req, res) => {
       { $set: { resendAfter: new Date() } }
     );
     logEmailDeliveryFailure('Verification email delivery', emailError);
-    res.status(503);
-    throw new Error('Your signup is pending email verification, but the email could not be delivered. Open the verification page to request a new link.');
+    res.status(isTemporaryEmailFailure(emailError) ? 503 : 502);
+    throw new Error(isTemporaryEmailFailure(emailError)
+      ? 'Your signup is pending email verification, but email delivery is temporarily unavailable. Please try again later.'
+      : 'Your signup is pending email verification, but email delivery failed. Please try again later.');
   }
 
   res.status(201).json({
@@ -245,13 +248,13 @@ export const resetPasswordRequest = async (req, res) => {
         to: email,
         subject: 'Reset your StayNest AI password',
         text: `We received a request to reset your password. This link expires in 15 minutes and can only be used once:\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`
-      });
+      }, { idempotencyKey: resetToken });
     } catch (emailError) {
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
       await user.save();
       logEmailDeliveryFailure('Password reset email delivery', emailError);
-      res.status(503);
+      res.status(isTemporaryEmailFailure(emailError) ? 503 : 502);
       throw new Error('Password reset email could not be sent. Please try again later.');
     }
   }
@@ -316,10 +319,19 @@ export const verifyEmail = async (req, res) => {
     }
 
     const tokenHash = createHash('sha256').update(token).digest('hex');
+    const now = new Date();
+    const pendingRecord = await PendingRegistration.findOne({
+      verificationTokenHash: tokenHash
+    });
+    if (pendingRecord && pendingRecord.expiresAt <= now) {
+      res.status(410);
+      throw new Error('Verification link has expired. Request a new verification email.');
+    }
+
     const pendingRegistration = await PendingRegistration.findOneAndUpdate(
       {
         verificationTokenHash: tokenHash,
-        expiresAt: { $gt: new Date() },
+        expiresAt: { $gt: now },
         verificationClaimed: { $ne: true }
       },
       { $set: { verificationClaimed: true } },
@@ -356,12 +368,25 @@ export const verifyEmail = async (req, res) => {
       return res.json({ message: 'Email verified successfully. Your account is ready to sign in.' });
     }
 
+    const legacyUser = await User.findOne({
+      emailVerificationCodeHash: tokenHash,
+      emailVerificationRequired: true,
+      verified: false
+    }).select('+emailVerificationExpires');
+    if (
+      legacyUser
+      && (!legacyUser.emailVerificationExpires || legacyUser.emailVerificationExpires <= now)
+    ) {
+      res.status(410);
+      throw new Error('Verification link has expired. Request a new verification email.');
+    }
+
     const user = await User.findOneAndUpdate(
       {
         emailVerificationCodeHash: tokenHash,
         emailVerificationRequired: true,
         verified: false,
-        emailVerificationExpires: { $gt: new Date() }
+        emailVerificationExpires: { $gt: now }
       },
       {
         $set: { verified: true, emailVerificationRequired: false, emailVerificationAttempts: 0 },
@@ -389,9 +414,18 @@ export const verifyEmail = async (req, res) => {
     throw new Error('Verification link or code is invalid, expired, or has already been used');
   }
 
+  if (!user.emailVerificationExpires || user.emailVerificationExpires <= new Date()) {
+    user.emailVerificationCodeHash = undefined;
+    user.emailVerificationSalt = undefined;
+    user.emailVerificationExpires = undefined;
+    user.emailVerificationResendAfter = undefined;
+    user.emailVerificationAttempts = 0;
+    await user.save();
+    res.status(410);
+    throw new Error('Verification code has expired. Request a new verification email.');
+  }
+
   if (
-    !user.emailVerificationExpires ||
-    user.emailVerificationExpires <= new Date() ||
     user.emailVerificationAttempts >= maxVerificationAttempts ||
     !matchesEmailVerificationCode(email, code, user.emailVerificationSalt, user.emailVerificationCodeHash)
   ) {
@@ -456,9 +490,10 @@ export const resendVerificationEmail = async (req, res) => {
   if (user) {
     const verificationUrl = `${getClientUrl()}/verify-email?token=${verificationToken}`;
     try {
-      await sendEmail({
+      await sendVerificationEmail({
         to: email,
-        ...verificationEmail(verificationUrl)
+        verificationUrl,
+        token: verificationToken
       });
     } catch (emailError) {
       await User.updateOne(
@@ -473,7 +508,7 @@ export const resendVerificationEmail = async (req, res) => {
         }
       );
       logEmailDeliveryFailure('Verification email delivery', emailError);
-      res.status(503);
+      res.status(isTemporaryEmailFailure(emailError) ? 503 : 502);
       throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
     }
   } else {
@@ -488,6 +523,7 @@ export const resendVerificationEmail = async (req, res) => {
         $set: {
           verificationTokenHash: createHash('sha256').update(pendingToken).digest('hex'),
           expiresAt: new Date(now.getTime() + verificationLinkLifetimeMs),
+          purgeAt: new Date(now.getTime() + verificationLinkLifetimeMs + 24 * 60 * 60 * 1000),
           resendAfter: retryAfter
         }
       },
@@ -496,9 +532,10 @@ export const resendVerificationEmail = async (req, res) => {
     if (pendingRegistration) {
       const verificationUrl = `${getClientUrl()}/verify-email?token=${pendingToken}`;
       try {
-        await sendEmail({
+        await sendVerificationEmail({
           to: email,
-          ...verificationEmail(verificationUrl)
+          verificationUrl,
+          token: pendingToken
         });
       } catch (emailError) {
         await PendingRegistration.updateOne(
@@ -510,7 +547,7 @@ export const resendVerificationEmail = async (req, res) => {
           { $set: { resendAfter: new Date() } }
         );
         logEmailDeliveryFailure('Verification email delivery', emailError);
-        res.status(503);
+        res.status(isTemporaryEmailFailure(emailError) ? 503 : 502);
         throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
       }
     }

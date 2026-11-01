@@ -21,7 +21,7 @@ import chatRoutes from './routes/chatRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
 import { handleStripeWebhook } from './controllers/paymentController.js';
-import { verifyEmailTransport } from './utils/sendEmail.js';
+import { getEmailConfigurationStatus } from './utils/sendEmail.js';
 import User from './models/User.js';
 
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
@@ -90,14 +90,19 @@ if (isProduction && clientUrls.length === 0) {
   throw new Error('FRONTEND_URL or CLIENT_URL must be configured in production');
 }
 
-verifyEmailTransport().catch((error) => {
-  console.error(JSON.stringify({
-    event: 'smtp_startup_verification_failed',
-    name: error instanceof Error ? error.name : 'UnknownError',
-    code: typeof error?.code === 'string' ? error.code : undefined,
-    responseCode: Number.isInteger(error?.responseCode) ? error.responseCode : undefined
+const emailConfiguration = getEmailConfigurationStatus();
+if (emailConfiguration.configured) {
+  console.info(JSON.stringify({
+    event: 'email_provider_configured',
+    provider: emailConfiguration.provider
   }));
-});
+} else {
+  console.warn(JSON.stringify({
+    event: 'email_provider_configuration_invalid',
+    provider: emailConfiguration.provider,
+    reason: emailConfiguration.reason
+  }));
+}
 
 app.use(helmet());
 app.use(

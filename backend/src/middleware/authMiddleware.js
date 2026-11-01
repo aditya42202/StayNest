@@ -33,7 +33,7 @@ export const protect = async (req, res, next) => {
     res.status(403);
     throw new Error('Forbidden: account has been blocked');
   }
-  if (req.user.emailVerificationRequired && !req.user.verified) {
+  if (!req.user.verified) {
     res.status(403);
     throw new Error('Please verify your email address before continuing');
   }
