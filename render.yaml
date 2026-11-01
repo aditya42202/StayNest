@@ -21,9 +21,9 @@ services:
       - key: JWT_ACCESS_EXPIRES_IN
         value: $JWT_ACCESS_EXPIRES_IN
       - key: CLIENT_URL
-        value: $CLIENT_URL
+        value: https://pennywise-expense-tracker-ten.vercel.app
       - key: FRONTEND_URL
-        value: $FRONTEND_URL
+        value: https://pennywise-expense-tracker-ten.vercel.app
       - key: CLOUDINARY_CLOUD_NAME
         value: $CLOUDINARY_CLOUD_NAME
       - key: CLOUDINARY_API_KEY
@@ -39,7 +39,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         value: $GOOGLE_CLIENT_SECRET
       - key: GOOGLE_CALLBACK_URL
-        value: $GOOGLE_CALLBACK_URL
+        value: https://expense-tracker-l07o.onrender.com/api/auth/google/callback
       - key: EMAIL_HOST
         value: $EMAIL_HOST
       - key: EMAIL_PORT
