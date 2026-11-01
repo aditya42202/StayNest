@@ -41,12 +41,12 @@ services:
       - key: GOOGLE_CALLBACK_URL
         value: https://expense-tracker-l07o.onrender.com/api/auth/google/callback
       - key: EMAIL_HOST
-        value: $EMAIL_HOST
+        value: smtp.gmail.com
       - key: EMAIL_PORT
-        value: $EMAIL_PORT
+        value: "587"
       - key: EMAIL_USER
-        value: $EMAIL_USER
+        sync: false
       - key: EMAIL_PASS
-        value: $EMAIL_PASS
+        sync: false
       - key: ADMIN_SIGNUP_EMAILS
         value: $ADMIN_SIGNUP_EMAILS
