@@ -38,7 +38,7 @@ const configuredClientUrls = [process.env.CLIENT_URL, process.env.FRONTEND_URL]
   .map((url) => url.trim())
   .filter(Boolean);
 const clientUrls = [...new Set(
-  configuredClientUrls
+  [...configuredClientUrls, 'https://stay-nest-eight.vercel.app']
     .map((url) => new URL(url).origin)
 )];
 if (process.env.NODE_ENV === 'production' && clientUrls.length === 0) {
