@@ -24,13 +24,13 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 ### Vercel setup
 
 1. Create a Vercel project from this repository.
-2. The production frontend API URL is configured in `frontend/.env.production` as `https://expense-tracker-l07o.onrender.com/api`. If `VITE_API_BASE_URL` is already set in Vercel, update it to the same value because the Vercel environment variable takes precedence. The frontend site URL is `https://stay-nest-eight.vercel.app`.
+2. The production frontend API URL is configured in `frontend/.env.production` as `https://staynest-1-ihrf.onrender.com/api`. If `VITE_API_BASE_URL` is already set in Vercel, update it to the same value because the Vercel environment variable takes precedence. The frontend site URL is `https://stay-nest-eight.vercel.app`.
 3. `vercel.json` is already configured to deploy `frontend/` as a static site.
 
 ### Render setup
 
 1. Create a Render Web Service in your Render account.
-2. Use `render.yaml` to configure the backend service, including the frontend CORS/redirect URL and Google OAuth callback URL.
+2. Use `render.yaml` to configure the backend service, including the production frontend URL, localhost CORS access, and Google OAuth callback URL. The backend URL is `https://staynest-1-ihrf.onrender.com`; local frontend requests use the Vite proxy at `http://localhost:5000`.
 3. Add the same environment variables shown in `render.yaml` using Render secrets or env vars:
    - `MONGO_URI`, `JWT_SECRET`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `EMAIL_USER`, `EMAIL_PASS`, `ADMIN_SIGNUP_EMAILS`
    - Email uses Gmail SMTP (`EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`). In the Render service's Environment settings, set `EMAIL_USER` to the Gmail address and `EMAIL_PASS` to that account's Google app password. Do not use the normal Gmail password. Email verification will remain unavailable until both are configured.
