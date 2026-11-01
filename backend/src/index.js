@@ -32,18 +32,15 @@ app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 // Connect Database
 connectDB();
 
+const isProduction = process.env.NODE_ENV === 'production';
 const configuredClientUrls = [process.env.CLIENT_URL, process.env.FRONTEND_URL]
   .filter(Boolean)
   .flatMap((value) => value.split(','))
   .map((url) => url.trim())
   .filter(Boolean);
-const clientUrls = [...new Set(
-  [...configuredClientUrls, 'https://stay-nest-eight.vercel.app']
-    .map((url) => new URL(url).origin)
-)];
-if (process.env.NODE_ENV === 'production' && clientUrls.length === 0) {
-  throw new Error('CLIENT_URL or FRONTEND_URL must be configured in production');
-}
+const clientUrls = isProduction
+  ? ['https://stay-nest-eight.vercel.app']
+  : [...new Set(configuredClientUrls.map((url) => new URL(url).origin))];
 
 app.use(helmet());
 app.use(

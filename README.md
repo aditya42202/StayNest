@@ -30,7 +30,7 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 ### Render setup
 
 1. Create a Render Web Service in your Render account.
-2. Use `render.yaml` to configure the backend service, including the production frontend URL, localhost CORS access, and Google OAuth callback URL. The backend URL is `https://staynest-1-ihrf.onrender.com`; local frontend requests use the Vite proxy at `http://localhost:5000`.
+2. Use `render.yaml` to configure the backend service. Production CORS allows only `https://stay-nest-eight.vercel.app`; localhost origins are not allowed in production. The backend URL is `https://staynest-1-ihrf.onrender.com`; local frontend requests use the Vite proxy at `http://localhost:5000` when running the backend in development mode.
 3. Add the same environment variables shown in `render.yaml` using Render secrets or env vars:
    - `MONGO_URI`, `JWT_SECRET`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `EMAIL_USER`, `EMAIL_PASS`, `ADMIN_SIGNUP_EMAILS`
    - Email uses Gmail SMTP (`EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`). In the Render service's Environment settings, set `EMAIL_USER` to the Gmail address and `EMAIL_PASS` to that account's Google app password. Do not use the normal Gmail password. Email verification will remain unavailable until both are configured.
