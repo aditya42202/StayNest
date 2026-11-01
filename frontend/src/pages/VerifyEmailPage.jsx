@@ -71,11 +71,11 @@ const VerifyEmailPage = () => {
     setError('');
     setMessage('');
     setSubmitting(true);
-    setCooldownSeconds(60);
 
     try {
       const { data } = await resendVerificationLink(email);
       setMessage(data.message);
+      setCooldownSeconds(60);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to send a verification link.');
     } finally {

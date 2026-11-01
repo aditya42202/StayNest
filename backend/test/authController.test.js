@@ -158,7 +158,12 @@ test('signup retains only a pending record and reports SMTP failure without logg
   t.mock.method(PendingRegistration, 'deleteOne', async () => ({ deletedCount: 0 }));
   t.mock.method(PendingRegistration, 'create', async (data) => {
     createdPending = data;
-    return data;
+    return { ...data, _id: 'pending-id' };
+  });
+  let releasedPending;
+  t.mock.method(PendingRegistration, 'updateOne', async (...args) => {
+    releasedPending = args;
+    return { modifiedCount: 1 };
   });
   createSmtpMock(t, async () => {
     const error = new Error('SMTP authentication failed');
@@ -178,6 +183,8 @@ test('signup retains only a pending record and reports SMTP failure without logg
   assert.ok(createdPending);
   assert.equal(createdPending.verified, undefined);
   assert.match(createdPending.verificationTokenHash, /^[a-f\d]{64}$/);
+  assert.equal(releasedPending[0]._id, 'pending-id');
+  assert.ok(releasedPending[1].$set.resendAfter instanceof Date);
   assert.equal(logs.join('\n').includes(createdPending.verificationTokenHash), false);
   assert.equal(logs.join('\n').includes(process.env.EMAIL_PASS), false);
 });
@@ -273,6 +280,57 @@ test('resend rotates the token atomically and sends only the generic response', 
   assert.equal(cooldownResponse.statusCode, 200);
   assert.equal(cooldownResponse.body.message, response.body.message);
   assert.equal(resendCalls, 2);
+});
+
+test('failed verification email releases the user resend cooldown', async (t) => {
+  setAuthEnvironment(t);
+  const user = { _id: 'user-id', email: 'person@gmail.com' };
+  t.mock.method(User, 'findOneAndUpdate', async () => user);
+  let rollback;
+  t.mock.method(User, 'updateOne', async (...args) => {
+    rollback = args;
+    return { modifiedCount: 1 };
+  });
+  t.mock.method(PendingRegistration, 'findOneAndUpdate', async () => (
+    assert.fail('must not fall back to a pending signup when an unverified user was found')
+  ));
+  createSmtpMock(t, async () => { throw new Error('SMTP unavailable'); });
+  const response = createResponse();
+
+  await assert.rejects(
+    resendVerificationEmail({ body: { email: user.email } }, response),
+    /could not be sent/
+  );
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(rollback[0]._id, user._id);
+  assert.ok(rollback[0].emailVerificationResendAfter instanceof Date);
+  assert.equal(rollback[1].$unset.emailVerificationResendAfter, '');
+});
+
+test('failed verification email releases the pending registration resend cooldown', async (t) => {
+  setAuthEnvironment(t);
+  const pending = { _id: 'pending-id', email: 'person@gmail.com' };
+  t.mock.method(User, 'findOneAndUpdate', async () => null);
+  t.mock.method(PendingRegistration, 'findOneAndUpdate', async () => pending);
+  let rollback;
+  t.mock.method(PendingRegistration, 'updateOne', async (...args) => {
+    rollback = args;
+    return { modifiedCount: 1 };
+  });
+  createSmtpMock(t, async () => { throw new Error('SMTP unavailable'); });
+  const response = createResponse();
+
+  await assert.rejects(
+    resendVerificationEmail({ body: { email: pending.email } }, response),
+    /could not be sent/
+  );
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(rollback[0]._id, pending._id);
+  assert.ok(rollback[0].resendAfter instanceof Date);
+  assert.equal(rollback[0].verificationClaimed.$ne, true);
+  assert.ok(rollback[1].$set.resendAfter instanceof Date);
 });
 
 test('login permits verified users and rejects unverified or invalid credentials', async (t) => {

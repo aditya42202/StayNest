@@ -162,6 +162,14 @@ export const registerUser = async (req, res) => {
       ...verificationEmail(verificationUrl)
     });
   } catch (emailError) {
+    await PendingRegistration.updateOne(
+      {
+        _id: pending._id,
+        verificationTokenHash,
+        verificationClaimed: { $ne: true }
+      },
+      { $set: { resendAfter: new Date() } }
+    );
     logEmailDeliveryFailure('Verification email delivery', emailError);
     res.status(503);
     throw new Error('Your signup is pending email verification, but the email could not be delivered. Open the verification page to request a new link.');
@@ -431,6 +439,7 @@ export const resendVerificationEmail = async (req, res) => {
   }
 
   const now = new Date();
+  const retryAfter = new Date(now.getTime() + verificationResendCooldownMs);
   const verificationToken = randomBytes(32).toString('hex');
   const user = await User.findOneAndUpdate(
     {
@@ -446,7 +455,7 @@ export const resendVerificationEmail = async (req, res) => {
         emailVerificationRequired: true,
         emailVerificationCodeHash: createHash('sha256').update(verificationToken).digest('hex'),
         emailVerificationExpires: new Date(now.getTime() + verificationLinkLifetimeMs),
-        emailVerificationResendAfter: new Date(now.getTime() + verificationResendCooldownMs),
+        emailVerificationResendAfter: retryAfter,
         emailVerificationAttempts: 0
       },
       $unset: { emailVerificationSalt: '' }
@@ -461,6 +470,17 @@ export const resendVerificationEmail = async (req, res) => {
         ...verificationEmail(verificationUrl)
       });
     } catch (emailError) {
+      await User.updateOne(
+        { _id: user._id, emailVerificationResendAfter: retryAfter },
+        {
+          $unset: {
+            emailVerificationCodeHash: '',
+            emailVerificationExpires: '',
+            emailVerificationResendAfter: ''
+          },
+          $set: { emailVerificationAttempts: 0 }
+        }
+      );
       logEmailDeliveryFailure('Verification email delivery', emailError);
       res.status(503);
       throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
@@ -477,7 +497,7 @@ export const resendVerificationEmail = async (req, res) => {
         $set: {
           verificationTokenHash: createHash('sha256').update(pendingToken).digest('hex'),
           expiresAt: new Date(now.getTime() + verificationLinkLifetimeMs),
-          resendAfter: new Date(now.getTime() + verificationResendCooldownMs)
+          resendAfter: retryAfter
         }
       },
       { new: true, runValidators: true }
@@ -490,6 +510,14 @@ export const resendVerificationEmail = async (req, res) => {
           ...verificationEmail(verificationUrl)
         });
       } catch (emailError) {
+        await PendingRegistration.updateOne(
+          {
+            _id: pendingRegistration._id,
+            resendAfter: retryAfter,
+            verificationClaimed: { $ne: true }
+          },
+          { $set: { resendAfter: new Date() } }
+        );
         logEmailDeliveryFailure('Verification email delivery', emailError);
         res.status(503);
         throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
