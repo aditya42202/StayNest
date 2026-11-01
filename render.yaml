@@ -44,6 +44,8 @@ services:
         value: https://staynest-1-ihrf.onrender.com/api/auth/google/callback
       - key: EMAIL_HOST
         value: smtp.gmail.com
+      - key: RESEND_API_KEY
+        sync: false
       - key: EMAIL_PORT
         value: "587"
       - key: EMAIL_USER

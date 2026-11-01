@@ -9,14 +9,16 @@ const setEmailEnvironment = (t) => {
     EMAIL_PORT: process.env.EMAIL_PORT,
     EMAIL_USER: process.env.EMAIL_USER,
     EMAIL_PASS: process.env.EMAIL_PASS,
-    EMAIL_FROM: process.env.EMAIL_FROM
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    RESEND_API_KEY: process.env.RESEND_API_KEY
   };
   Object.assign(process.env, {
     EMAIL_HOST: 'smtp.example.test',
     EMAIL_PORT: '587',
     EMAIL_USER: 'sender@example.test',
     EMAIL_PASS: 'not-a-real-password',
-    EMAIL_FROM: 'Pennywise <sender@example.test>'
+    EMAIL_FROM: 'Pennywise <sender@example.test>',
+    RESEND_API_KEY: ''
   });
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) {
@@ -86,6 +88,77 @@ test('SMTP startup verification reports readiness without logging credentials', 
   await verifyEmailTransport();
 
   assert.equal(transportConfig.auth.pass, 'not-a-real-password');
-  assert.match(logged[0], /smtp_ready/);
+  assert.match(logged[0], /email_provider_ready/);
+  assert.match(logged[0], /"provider":"smtp"/);
   assert.doesNotMatch(logged[0], /not-a-real-password|sender@example\.test/);
+});
+
+test('Resend sends verification mail over HTTPS without SMTP or credential logging', async (t) => {
+  setEmailEnvironment(t);
+  process.env.RESEND_API_KEY = 're_test_secret_not_for_logs';
+  let requestUrl;
+  let requestOptions;
+  const logged = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requestUrl = url;
+    requestOptions = options;
+    return { ok: true, status: 200 };
+  });
+  t.mock.method(console, 'info', (message) => logged.push(message));
+
+  await sendEmail({
+    to: 'recipient@example.test',
+    subject: 'Verify',
+    text: 'Open your verification link',
+    html: '<p>Verify</p>'
+  });
+
+  assert.equal(requestUrl, 'https://api.resend.com/emails');
+  assert.equal(requestOptions.method, 'POST');
+  assert.equal(requestOptions.headers.Authorization, 'Bearer re_test_secret_not_for_logs');
+  assert.deepEqual(JSON.parse(requestOptions.body), {
+    from: 'Pennywise <sender@example.test>',
+    to: ['recipient@example.test'],
+    subject: 'Verify',
+    text: 'Open your verification link',
+    html: '<p>Verify</p>'
+  });
+  assert.match(logged[0], /"provider":"resend"/);
+  assert.doesNotMatch(logged.join('\n'), /re_test_secret_not_for_logs|recipient@example\.test/);
+});
+
+test('Resend startup check verifies API access without exposing the API key', async (t) => {
+  setEmailEnvironment(t);
+  process.env.RESEND_API_KEY = 're_test_secret_not_for_logs';
+  let requestUrl;
+  let requestOptions;
+  const logged = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requestUrl = url;
+    requestOptions = options;
+    return { ok: true, status: 200 };
+  });
+  t.mock.method(console, 'info', (message) => logged.push(message));
+
+  await verifyEmailTransport();
+
+  assert.equal(requestUrl, 'https://api.resend.com/domains');
+  assert.equal(requestOptions.headers.Authorization, 'Bearer re_test_secret_not_for_logs');
+  assert.match(logged[0], /"provider":"resend"/);
+  assert.doesNotMatch(logged.join('\n'), /re_test_secret_not_for_logs/);
+});
+
+test('Resend API rejection surfaces a safe provider code for diagnosis', async (t) => {
+  setEmailEnvironment(t);
+  process.env.RESEND_API_KEY = 're_test_secret_not_for_logs';
+  const logged = [];
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 403 }));
+  t.mock.method(console, 'error', (message) => logged.push(message));
+
+  await assert.rejects(
+    sendEmail({ to: 'recipient@example.test', subject: 'Verify', text: 'Verify' }),
+    (error) => error.code === 'RESEND_API_ERROR' && error.responseCode === 403
+  );
+  assert.doesNotMatch(logged.join('\n'), /re_test_secret_not_for_logs|recipient@example\.test/);
+  assert.match(logged[0], /"code":"RESEND_API_ERROR"/);
 });

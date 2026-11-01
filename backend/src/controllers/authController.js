@@ -19,7 +19,7 @@ import {
   matchesEmailVerificationCode,
   normalizeEmail
 } from '../utils/authSecurity.js';
-import { sendEmail } from '../utils/sendEmail.js';
+import { isEmailServiceConfigured, sendEmail } from '../utils/sendEmail.js';
 import { canonicalRole, normalizeRole } from '../utils/roles.js';
 
 const saltRounds = 12;
@@ -42,15 +42,6 @@ const authUser = (user) => ({
   role: normalizeRole(user.role),
   verified: user.verified
 });
-
-const isEmailServiceConfigured = () => Boolean(
-  process.env.EMAIL_HOST &&
-  process.env.EMAIL_USER &&
-  process.env.EMAIL_PASS &&
-  Number.isInteger(Number(process.env.EMAIL_PORT || 587)) &&
-  Number(process.env.EMAIL_PORT || 587) > 0 &&
-  Number(process.env.EMAIL_PORT || 587) <= 65535
-);
 
 const logEmailDeliveryFailure = (operation, error) => {
   const details = {
