@@ -24,7 +24,7 @@ StayNest AI is a full-stack MERN booking platform for students, professionals, P
 ### Vercel setup
 
 1. Create a Vercel project from this repository.
-2. The production frontend API URL is configured in `frontend/.env.production` as `https://expense-tracker-l07o.onrender.com/api`. If `VITE_API_BASE_URL` is already set in Vercel, update it to the same value because the Vercel environment variable takes precedence.
+2. The production frontend API URL is configured in `frontend/.env.production` as `https://expense-tracker-l07o.onrender.com/api`. If `VITE_API_BASE_URL` is already set in Vercel, update it to the same value because the Vercel environment variable takes precedence. The frontend site URL is `https://stay-nest-eight.vercel.app`.
 3. `vercel.json` is already configured to deploy `frontend/` as a static site.
 
 ### Render setup

@@ -21,9 +21,9 @@ services:
       - key: JWT_ACCESS_EXPIRES_IN
         value: $JWT_ACCESS_EXPIRES_IN
       - key: CLIENT_URL
-        value: https://pennywise-expense-tracker-ten.vercel.app
+        value: https://stay-nest-eight.vercel.app
       - key: FRONTEND_URL
-        value: https://pennywise-expense-tracker-ten.vercel.app
+        value: https://stay-nest-eight.vercel.app
       - key: CLOUDINARY_CLOUD_NAME
         value: $CLOUDINARY_CLOUD_NAME
       - key: CLOUDINARY_API_KEY
