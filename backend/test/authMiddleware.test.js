@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import { authorize } from '../src/middleware/authMiddleware.js';
 import generateToken, { getJWTSecret } from '../src/utils/generateToken.js';
+import { canonicalRole, normalizeRole } from '../src/utils/roles.js';
 
 const secret = 'test-secret-with-more-than-thirty-two-characters';
 
@@ -39,6 +40,32 @@ test('role authorization normalizes legacy student accounts', () => {
 
   authorize('user')(request, response, () => { continued = true; });
   assert.equal(continued, true);
+});
+
+test('tenant and tourist roles share customer authorization without a parallel role system', () => {
+  assert.equal(normalizeRole('student'), 'user');
+  assert.equal(normalizeRole('tenant'), 'user');
+  assert.equal(normalizeRole('tourist'), 'user');
+  assert.equal(canonicalRole('tourist'), 'user');
+
+  let continued = false;
+  const request = { user: { role: 'owner' } };
+  const response = { status: (code) => { response.statusCode = code; return response; } };
+  authorize('user', 'owner')(request, response, () => { continued = true; });
+  assert.equal(continued, true);
+});
+
+test('admin is not authorized to use customer property-search endpoints', () => {
+  let continued = false;
+  const request = { user: { role: 'admin' } };
+  const response = { status: (code) => { response.statusCode = code; return response; } };
+
+  assert.throws(
+    () => authorize('user', 'owner')(request, response, () => { continued = true; }),
+    /insufficient permissions/
+  );
+  assert.equal(continued, false);
+  assert.equal(response.statusCode, 403);
 });
 
 test('role authorization rejects accounts outside the allowed roles', () => {

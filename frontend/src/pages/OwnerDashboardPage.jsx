@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   getOwnerBookings,
   getOwnerDashboard,
@@ -18,7 +18,8 @@ const categories = [
 const tabs = [
   { id: 'overview', label: 'Overview' },
   { id: 'properties', label: 'My properties' },
-  { id: 'bookings', label: 'Bookings' }
+  { id: 'bookings', label: 'Bookings' },
+  { id: 'availability', label: 'Manage availability' }
 ];
 
 const emptyPropertyForm = () => ({
@@ -43,12 +44,15 @@ const emptyPropertyForm = () => ({
 const dateLabel = (value) => (value ? new Date(value).toLocaleString() : 'Not specified');
 
 const OwnerDashboardPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dashboard, setDashboard] = useState(null);
   const [properties, setProperties] = useState([]);
   const [requests, setRequests] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => (
+    tabs.some((tab) => tab.id === searchParams.get('tab')) ? searchParams.get('tab') : 'overview'
+  ));
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
@@ -79,6 +83,11 @@ const OwnerDashboardPage = () => {
   };
 
   useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (tabs.some((tab) => tab.id === requestedTab)) setActiveTab(requestedTab);
+  }, [searchParams]);
+
+  useEffect(() => {
     const loadDashboard = async () => {
       try {
         await fetchData();
@@ -96,6 +105,7 @@ const OwnerDashboardPage = () => {
     setEditingPropertyId('');
     setPropertyForm(emptyPropertyForm());
     setActiveTab('properties');
+    setSearchParams({ tab: 'properties' }, { replace: true });
     setShowPropertyForm(true);
     setActionError('');
     setActionMessage('');
@@ -275,7 +285,7 @@ const OwnerDashboardPage = () => {
           <p className="mt-3 text-slate-400">Manage listings, availability, and booking requests.</p>
         </div>
         <button type="button" onClick={beginCreate} className="rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/20">
-          Add a property
+          List Your Property
         </button>
       </header>
 
@@ -293,7 +303,10 @@ const OwnerDashboardPage = () => {
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSearchParams({ tab: tab.id }, { replace: true });
+            }}
             aria-current={activeTab === tab.id ? 'page' : undefined}
             className={`rounded-full px-5 py-2 text-sm transition ${
               activeTab === tab.id ? 'bg-blue-500 text-white' : 'border border-white/10 bg-slate-950/60 text-slate-300 hover:text-white'
@@ -316,7 +329,7 @@ const OwnerDashboardPage = () => {
           <section className="glass-card rounded-[32px] border border-white/10 p-8 shadow-glass">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl font-semibold">Your properties</h2>
-              <button type="button" onClick={() => setActiveTab('properties')} className="text-sm text-blue-300 hover:text-white">Manage listings</button>
+              <button type="button" onClick={() => { setActiveTab('properties'); setSearchParams({ tab: 'properties' }, { replace: true }); }} className="text-sm text-blue-300 hover:text-white">Manage listings</button>
             </div>
             <div className="mt-6 space-y-4">
               {properties.length === 0 ? (
@@ -364,9 +377,12 @@ const OwnerDashboardPage = () => {
         </div>
       )}
 
-      {activeTab === 'properties' && (
+      {(activeTab === 'properties' || activeTab === 'availability') && (
         <div className="mt-8 space-y-6">
-          {showPropertyForm && (
+          {activeTab === 'availability' && (
+            <p className="text-sm text-slate-400">Update whether each listing is currently accepting booking requests.</p>
+          )}
+          {activeTab === 'properties' && showPropertyForm && (
             <form onSubmit={handlePropertySubmit} className="glass-card rounded-[32px] border border-white/10 p-8 shadow-glass">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <h2 className="text-2xl font-semibold">{editingPropertyId ? 'Edit property' : 'Add a property'}</h2>
@@ -449,11 +465,11 @@ const OwnerDashboardPage = () => {
                   </div>
                   <p className="mt-4 line-clamp-3 text-sm text-slate-400">{property.description}</p>
                   <div className="mt-5 flex flex-wrap gap-3">
-                    <button type="button" onClick={() => beginEdit(property)} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 hover:border-blue-400">Edit</button>
+                    {activeTab === 'properties' && <button type="button" onClick={() => beginEdit(property)} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 hover:border-blue-400">Edit</button>}
                     <button type="button" disabled={busyPropertyId === property._id} onClick={() => handleAvailability(property)} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 hover:border-blue-400 disabled:opacity-50">
                       {property.available ? 'Mark unavailable' : 'Make available'}
                     </button>
-                    <button type="button" disabled={busyPropertyId === property._id} onClick={() => handleDeleteProperty(property)} className="rounded-full border border-rose-400/30 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/10 disabled:opacity-50">Delete</button>
+                    {activeTab === 'properties' && <button type="button" disabled={busyPropertyId === property._id} onClick={() => handleDeleteProperty(property)} className="rounded-full border border-rose-400/30 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/10 disabled:opacity-50">Delete</button>}
                   </div>
                 </article>
               ))}

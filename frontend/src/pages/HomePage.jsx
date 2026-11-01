@@ -1,12 +1,10 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { HiOutlineSearch } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
-import SearchBanner from '../components/SearchBanner.jsx';
+import { useSelector } from 'react-redux';
 import PropertyCard from '../components/PropertyCard.jsx';
 import { getFeaturedProperties } from '../api/propertyApi.js';
 
-const categories = ['PG', 'Hostel', 'Room', 'Flat', 'House'];
 const topCategories = [
   { title: 'Boys PG', label: 'Explore Now' },
   { title: 'Girls PG', label: 'Explore Now' },
@@ -15,10 +13,12 @@ const topCategories = [
   { title: 'Private Room', label: 'Explore Now' },
   { title: 'Flat', label: 'Explore Now' }
 ];
-const popularCities = ['Lucknow', 'Delhi', 'Bangalore', 'Pune', 'Mumbai'];
-
 const HomePage = () => {
   const navigate = useNavigate();
+  const user = useSelector((state) => state.auth.user);
+  const role = ['student', 'tenant', 'tourist'].includes(String(user?.role || '').toLowerCase())
+    ? 'user'
+    : user?.role;
   const [featuredProperties, setFeaturedProperties] = useState([]);
   const [loadingFeatured, setLoadingFeatured] = useState(true);
 
@@ -71,55 +71,31 @@ const HomePage = () => {
               PG, Hostel, Room & Rental House bookings for students, professionals and property owners with AI-powered match, secure payments and verified listings.
             </motion.p>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3 }} className="rounded-[32px] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-slate-950/50 backdrop-blur-xl">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap gap-3">
-                  {categories.map((item) => (
-                    <button key={item} onClick={() => handleCategorySearch(item)} className="rounded-full border border-slate-700/80 bg-slate-900/90 px-4 py-2 text-sm text-slate-200 transition hover:border-blue-400 hover:text-white">
-                      {item}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => navigate('/search')} className="rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:opacity-95">
-                  View all categories
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3 }} className="flex flex-wrap gap-4">
+              <button
+                type="button"
+                onClick={() => navigate(role === 'admin' ? '/dashboard' : '/search')}
+                className="rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:opacity-95"
+              >
+                {role === 'admin' ? 'Admin Dashboard' : role === 'owner' ? 'Browse Stays' : 'Search Stays'}
+              </button>
+              {role === 'owner' ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard?tab=properties')}
+                  className="rounded-full border border-emerald-400/40 px-8 py-4 text-base font-semibold text-emerald-200 transition hover:bg-emerald-400/10"
+                >
+                  List Your Property
                 </button>
-                <button onClick={() => navigate('/list-property')} className="rounded-full border border-emerald-400/40 px-5 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/10">
-                  List your property
+              ) : role !== 'admin' ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/list-property')}
+                  className="rounded-full border border-white/15 px-8 py-4 text-base font-semibold text-slate-200 transition hover:border-blue-400 hover:text-white"
+                >
+                  List Your Property
                 </button>
-              </div>
-
-              <div className="mt-6">
-                <SearchBanner />
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-3 text-sm text-slate-400">
-                {['Near College', 'Boys PG', 'Girls PG', 'Low to High Rent', 'Hostel'].map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => {
-                      if (item === 'Near College') return navigate('/search?q=near+college');
-                      if (item === 'Low to High Rent') return navigate('/search?sort=rent_asc');
-                      const normalize = (c) => {
-                        const map = {
-                          'Boys PG': 'boys pg',
-                          'Girls PG': 'girls pg',
-                          'Hostel': 'hostel',
-                          'Shared Room': 'shared room',
-                          'Private Room': 'private room',
-                          'Flat': 'flat',
-                          'House': 'house',
-                          'PG': 'pg'
-                        };
-                        return map[c] || c.toLowerCase();
-                      };
-                      return navigate(`/search?category=${encodeURIComponent(normalize(item))}`);
-                    }}
-                    className="rounded-full border border-slate-800 bg-slate-900/80 px-4 py-2 transition hover:border-blue-500/60 hover:text-white"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+              ) : null}
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.35 }} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -201,62 +177,6 @@ const HomePage = () => {
           ) : (
             <div className="rounded-[32px] bg-slate-900/80 p-10 text-center text-slate-400">No featured properties available yet.</div>
           )}
-        </div>
-      </section>
-      <section className="mx-auto max-w-7xl space-y-10 px-6 pb-24">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-blue-300">Popular Cities</p>
-            <h2 className="text-4xl font-semibold">Search properties in top student cities</h2>
-          </div>
-          <button className="rounded-full bg-white/10 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-950/20 hover:bg-white/15">View All Cities</button>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
-          {popularCities.map((city) => (
-            <button key={city} onClick={() => navigate(`/search?city=${encodeURIComponent(city)}`)} className="group overflow-hidden rounded-[32px] bg-slate-900/80 p-6 text-left text-white shadow-glass transition hover:-translate-y-1">
-              <div className="mb-5 h-40 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600" />
-              <h3 className="text-2xl font-semibold">{city}</h3>
-              <p className="mt-2 text-slate-400">{Math.floor(Math.random() * 3000) + 1200}+ Properties</p>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl rounded-[32px] border border-white/10 bg-slate-950/80 px-8 py-14 shadow-glass backdrop-blur-xl">
-        <div className="grid gap-10 lg:grid-cols-[1fr_0.8fr]">
-          <div className="space-y-5">
-            <p className="text-sm uppercase tracking-[0.24em] text-blue-300">AI Powered Recommendations</p>
-            <h2 className="text-4xl font-semibold">Get tailored suggestions for budget, location, and preferences.</h2>
-            <p className="text-slate-300">StayNest AI uses intelligent recommendations to surface the best rooms, hostels, and PGs near your college or workplace.</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-900/80 p-5">
-                <p className="text-sm text-slate-400">Verified Listings</p>
-                <p className="mt-3 text-xl font-semibold">Safe stays</p>
-              </div>
-              <div className="rounded-3xl bg-slate-900/80 p-5">
-                <p className="text-sm text-slate-400">Instant Booking</p>
-                <p className="mt-3 text-xl font-semibold">Fast checkout</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[32px] bg-slate-950/90 p-8 shadow-glass">
-            <div className="grid gap-6">
-              <div className="rounded-[28px] bg-slate-900/80 p-6">
-                <p className="text-sm text-slate-400">Download Our App</p>
-                <h3 className="mt-3 text-2xl font-semibold">Book your stay on the go.</h3>
-                <div className="mt-6 flex gap-4">
-                  <button className="rounded-3xl bg-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/20">Google Play</button>
-                  <button className="rounded-3xl bg-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/20">App Store</button>
-                </div>
-              </div>
-              <div className="rounded-[28px] bg-slate-900/80 p-6">
-                <p className="text-sm text-slate-400">AI Assistant</p>
-                <p className="mt-3 text-lg text-slate-200">Personalized property matching, image verification, and safety insights.</p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     </main>

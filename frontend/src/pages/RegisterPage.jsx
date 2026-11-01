@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient.js';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user' });
   const [error, setError] = useState('');
 
@@ -14,13 +15,16 @@ const RegisterPage = () => {
     setError('');
     try {
       const { data } = await apiClient.post('/auth/register', form);
-      navigate('/verify-email', { replace: true, state: { email: data.user?.email || form.email } });
+      navigate('/verify-email', {
+        replace: true,
+        state: { email: data.user?.email || form.email, from: location.state?.from }
+      });
     } catch (err) {
       const message = err.response?.data?.message || 'Registration failed';
       if (message.includes('account was created')) {
         navigate('/verify-email', {
           replace: true,
-          state: { email: form.email, message }
+          state: { email: form.email, message, from: location.state?.from }
         });
         return;
       }

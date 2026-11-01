@@ -21,7 +21,14 @@ const LoginPage = () => {
     try {
       const { data } = await apiClient.post('/auth/login', { email, password });
       dispatch(loginSuccess(data));
-      navigate('/dashboard');
+      const requestedPath = location.state?.from;
+      const destination = typeof requestedPath === 'string'
+        && requestedPath.startsWith('/')
+        && !requestedPath.startsWith('//')
+        && !requestedPath.startsWith('/login')
+        ? requestedPath
+        : '/dashboard';
+      navigate(destination, { replace: true });
     } catch (err) {
       const message = err.response?.data?.message || 'Login failed';
       setError(message);
@@ -42,7 +49,7 @@ const LoginPage = () => {
           <input value={password} onChange={(e) => setPassword(e.target.value)} required type="password" placeholder="Password" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           {error && <p className="text-sm text-rose-400">{error}</p>}
           {needsVerification && (
-            <Link to="/verify-email" state={{ email }} className="block text-sm text-blue-300 underline">
+            <Link to="/verify-email" state={{ email, from: location.state?.from }} className="block text-sm text-blue-300 underline">
               Verify your email address
             </Link>
           )}
@@ -53,7 +60,7 @@ const LoginPage = () => {
         </form>
 
         <div className="mt-6 text-slate-400">
-          <p>Don't have an account? <Link to="/register" className="text-white underline">Register here</Link></p>
+          <p>Don't have an account? <Link to="/register" state={{ from: location.state?.from }} className="text-white underline">Register here</Link></p>
         </div>
       </div>
     </section>

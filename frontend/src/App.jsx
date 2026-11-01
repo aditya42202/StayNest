@@ -21,7 +21,9 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/search" element={<SearchResultsPage />} />
+        <Route element={<ProtectedRoute roles={['user', 'owner']} />}>
+          <Route path="/search" element={<SearchResultsPage />} />
+        </Route>
         <Route path="/property/:id" element={<PropertyDetailsPage />} />
         <Route path="/list-property" element={<PublicOwnerListingPage />} />
         <Route path="/login" element={<LoginPage />} />

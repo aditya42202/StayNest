@@ -16,8 +16,8 @@ import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', getProperties);
-router.get('/search', searchProperties);
+router.get('/', protect, authorize('user', 'owner'), getProperties);
+router.get('/search', protect, authorize('user', 'owner'), searchProperties);
 router.get('/featured', getFeaturedProperties);
 router.post('/owner-listing-requests', submitOwnerListingRequest);
 router.get('/:id', getPropertyById);

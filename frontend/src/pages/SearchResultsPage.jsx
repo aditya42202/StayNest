@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../api/apiClient.js';
+import SearchBanner from '../components/SearchBanner.jsx';
 
 const filters = ['Hotel', 'Hostel', 'Homestay', 'Student Room', 'Hourly stay', 'Boys PG', 'Girls PG', 'More'];
 
@@ -88,6 +89,8 @@ const SearchResultsPage = () => {
           ))}
         </div>
       </div>
+
+      <SearchBanner />
 
       {loading ? (
         <div className="rounded-[32px] bg-slate-900/80 p-16 text-center text-slate-300">Loading properties…</div>

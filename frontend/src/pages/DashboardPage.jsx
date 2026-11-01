@@ -19,7 +19,7 @@ const DashboardPage = () => {
     return <OwnerDashboardPage />;
   }
 
-  if (user.role === 'user' || user.role === 'student') {
+  if (['user', 'student', 'tenant', 'tourist'].includes(String(user.role || '').toLowerCase())) {
     return <StudentDashboardPage />;
   }
 

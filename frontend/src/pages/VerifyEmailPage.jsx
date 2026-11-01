@@ -21,7 +21,7 @@ const VerifyEmailPage = () => {
       await verifyEmail(email, code);
       navigate('/login', {
         replace: true,
-        state: { message: 'Email verified successfully. Please sign in.' }
+        state: { message: 'Email verified successfully. Please sign in.', from: location.state?.from }
       });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to verify your email address.');
@@ -95,7 +95,7 @@ const VerifyEmailPage = () => {
           Resend verification code
         </button>
         <p className="mt-6 text-slate-400">
-          Already verified? <Link to="/login" className="text-white underline">Sign in</Link>
+          Already verified? <Link to="/login" state={{ from: location.state?.from }} className="text-white underline">Sign in</Link>
         </p>
       </div>
     </section>
