@@ -71,7 +71,11 @@ connectDB().then(() => {
 });
 
 const isProduction = process.env.NODE_ENV === 'production';
-const configuredClientUrls = [process.env.CLIENT_URL, process.env.FRONTEND_URL]
+const configuredClientUrls = [
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  process.env.CORS_ALLOWED_ORIGINS
+]
   .filter(Boolean)
   .flatMap((value) => value.split(','))
   .map((url) => url.trim())

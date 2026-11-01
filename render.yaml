@@ -21,9 +21,11 @@ services:
       - key: JWT_ACCESS_EXPIRES_IN
         value: $JWT_ACCESS_EXPIRES_IN
       - key: CLIENT_URL
-        value: https://pennywise-expense-tracker-ten.vercel.app
+        value: https://stay-nest-eight.vercel.app
       - key: FRONTEND_URL
-        value: https://pennywise-expense-tracker-ten.vercel.app
+        value: https://stay-nest-eight.vercel.app
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://stay-nest-eight.vercel.app,http://localhost:5173,http://localhost:3000
       - key: CLOUDINARY_CLOUD_NAME
         value: $CLOUDINARY_CLOUD_NAME
       - key: CLOUDINARY_API_KEY
@@ -39,7 +41,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         value: $GOOGLE_CLIENT_SECRET
       - key: GOOGLE_CALLBACK_URL
-        value: https://expense-tracker-l07o.onrender.com/api/auth/google/callback
+        value: https://staynest-1-ihrf.onrender.com/api/auth/google/callback
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
