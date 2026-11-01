@@ -34,6 +34,13 @@ const authUser = (user) => ({
   verified: user.verified
 });
 
+const isEmailServiceConfigured = () => Boolean(
+  process.env.EMAIL_HOST &&
+  process.env.EMAIL_USER &&
+  process.env.EMAIL_PASS &&
+  process.env.EMAIL_PORT
+);
+
 const getClientUrl = () => (
   (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173')
     .split(',')[0]
@@ -75,10 +82,7 @@ export const registerUser = async (req, res) => {
     }
   }
 
-  if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    res.status(503);
-    throw new Error('Email verification is temporarily unavailable. Please try again later.');
-  }
+  const emailServiceConfigured = isEmailServiceConfigured();
 
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
@@ -94,30 +98,39 @@ export const registerUser = async (req, res) => {
     email: normalizedEmail,
     password: hashedPassword,
     role: requestedRole,
-    emailVerificationRequired: true,
-    emailVerificationCodeHash: hashEmailVerificationCode(normalizedEmail, verificationCode, verificationSalt),
-    emailVerificationSalt: verificationSalt,
-    emailVerificationExpires: new Date(Date.now() + verificationCodeLifetimeMs),
+    verified: !emailServiceConfigured,
+    emailVerificationRequired: emailServiceConfigured,
+    emailVerificationCodeHash: emailServiceConfigured
+      ? hashEmailVerificationCode(normalizedEmail, verificationCode, verificationSalt)
+      : undefined,
+    emailVerificationSalt: emailServiceConfigured ? verificationSalt : undefined,
+    emailVerificationExpires: emailServiceConfigured
+      ? new Date(Date.now() + verificationCodeLifetimeMs)
+      : undefined,
     emailVerificationAttempts: 0
   });
 
-  try {
-    await sendEmail({
-      to: normalizedEmail,
-      subject: 'Your StayNest AI verification code',
-      text: `Your StayNest AI verification code is ${verificationCode}. It expires in 10 minutes.`
-    });
-  } catch (emailError) {
-    console.error('Verification email could not be sent:', emailError.message);
-    res.status(503);
-    throw new Error('Your account was created, but the verification email could not be sent. Request a new code to continue.');
+  if (emailServiceConfigured) {
+    try {
+      await sendEmail({
+        to: normalizedEmail,
+        subject: 'Your StayNest AI verification code',
+        text: `Your StayNest AI verification code is ${verificationCode}. It expires in 10 minutes.`
+      });
+    } catch (emailError) {
+      console.error('Verification email could not be sent:', emailError.message);
+      res.status(503);
+      throw new Error('Your account was created, but the verification email could not be sent. Request a new code to continue.');
+    }
+  } else {
+    console.warn('Email service is not configured. Registering the account as verified for this environment.');
   }
 
   const token = generateToken(user);
   res.status(201).json({
     user: authUser(user),
     token,
-    verificationRequired: true
+    verificationRequired: emailServiceConfigured
   });
 };
 
@@ -152,9 +165,8 @@ export const resetPasswordRequest = async (req, res) => {
     res.status(400);
     throw new Error('Email is required');
   }
-  if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    res.status(503);
-    throw new Error('Password reset email is temporarily unavailable. Please try again later.');
+  if (!isEmailServiceConfigured()) {
+    return res.json({ message: 'If an account exists for that email, a password reset link has been sent.' });
   }
 
   const user = await User.findOne({ email });
@@ -283,9 +295,8 @@ export const resendVerificationCode = async (req, res) => {
     res.status(400);
     throw new Error('Email is required');
   }
-  if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    res.status(503);
-    throw new Error('Email verification is temporarily unavailable. Please try again later.');
+  if (!isEmailServiceConfigured()) {
+    return res.json({ message: 'Email verification is not configured in this environment. Please sign in to continue.' });
   }
 
   const user = await User.findOne({ email, verified: false });

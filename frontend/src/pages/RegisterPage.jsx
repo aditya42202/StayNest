@@ -15,9 +15,19 @@ const RegisterPage = () => {
     setError('');
     try {
       const { data } = await apiClient.post('/auth/register', form);
-      navigate('/verify-email', {
+      if (data.verificationRequired) {
+        navigate('/verify-email', {
+          replace: true,
+          state: { email: data.user?.email || form.email, from: location.state?.from }
+        });
+        return;
+      }
+      navigate('/login', {
         replace: true,
-        state: { email: data.user?.email || form.email, from: location.state?.from }
+        state: {
+          message: 'Account created successfully. Please sign in.',
+          from: location.state?.from
+        }
       });
     } catch (err) {
       const message = err.response?.data?.message || 'Registration failed';
