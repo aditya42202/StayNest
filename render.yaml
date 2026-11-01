@@ -48,5 +48,11 @@ services:
         sync: false
       - key: EMAIL_PASS
         sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_VERIFICATION_TOKEN_TTL_MINUTES
+        value: "30"
+      - key: EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS
+        value: "60"
       - key: ADMIN_SIGNUP_EMAILS
         value: $ADMIN_SIGNUP_EMAILS

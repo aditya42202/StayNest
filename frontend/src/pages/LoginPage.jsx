@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginRequest, loginSuccess, loginFailure } from '../store/authSlice.js';
@@ -16,13 +16,23 @@ const LoginPage = () => {
   const [verificationMessage, setVerificationMessage] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [resending, setResending] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setCooldownSeconds((seconds) => seconds - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldownSeconds]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setError('');
     setNeedsVerification(false);
     setVerificationMessage('');
     setVerificationError('');
+    setSubmitting(true);
     dispatch(loginRequest());
     try {
       const { data } = await apiClient.post('/auth/login', { email, password });
@@ -40,13 +50,17 @@ const LoginPage = () => {
       setError(message);
       setNeedsVerification(err.response?.status === 403 && message.toLowerCase().includes('verify'));
       dispatch(loginFailure(message));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleResendVerification = async () => {
+    if (resending || cooldownSeconds > 0) return;
     setVerificationMessage('');
     setVerificationError('');
     setResending(true);
+    setCooldownSeconds(60);
     try {
       const { data } = await resendVerificationLink(email);
       setVerificationMessage(data.message);
@@ -73,10 +87,10 @@ const LoginPage = () => {
               <button
                 type="button"
                 onClick={handleResendVerification}
-                disabled={resending}
+                disabled={resending || cooldownSeconds > 0}
                 className="text-sm text-blue-300 underline disabled:cursor-wait disabled:opacity-60"
               >
-                {resending ? 'Sending...' : 'Resend Verification Email'}
+                {resending ? 'Sending...' : cooldownSeconds > 0 ? `Resend available in ${cooldownSeconds}s` : 'Resend Verification Email'}
               </button>
               <Link to="/verify-email" state={{ email, from: location.state?.from }} className="block text-sm text-blue-300 underline">
                 Open email verification page
@@ -88,7 +102,7 @@ const LoginPage = () => {
           <div className="text-right">
             <Link to="/forgot-password" className="text-sm text-blue-300 hover:text-white">Forgot password?</Link>
           </div>
-          <button type="submit" className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95">Sign in</button>
+          <button type="submit" disabled={submitting} className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95 disabled:cursor-wait disabled:opacity-60">{submitting ? 'Signing in...' : 'Sign in'}</button>
         </form>
 
         <div className="mt-6 text-slate-400">

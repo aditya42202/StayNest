@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
   emailVerificationSalt: { type: String, select: false },
   emailVerificationExpires: { type: Date, select: false },
   emailVerificationAttempts: { type: Number, default: 0 },
+  emailVerificationResendAfter: { type: Date, select: false },
   role: { type: String, enum: ['user', 'student', 'owner', 'admin'], default: 'user' },
   blocked: { type: Boolean, default: false },
   phone: { type: String },

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { resendVerificationLink, verifyEmail, verifyEmailToken } from '../api/authApi.js';
 
@@ -11,6 +11,23 @@ const VerifyEmailPage = () => {
   const [error, setError] = useState(location.state?.error || '');
   const [message, setMessage] = useState(location.state?.message || '');
   const [submitting, setSubmitting] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (verificationToken) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${location.pathname}${location.hash}`
+      );
+    }
+  }, [location.hash, location.pathname, verificationToken]);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setCooldownSeconds((seconds) => seconds - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldownSeconds]);
 
   const handleVerifyLink = async () => {
     setError('');
@@ -50,9 +67,11 @@ const VerifyEmailPage = () => {
 
   const handleResend = async (event) => {
     event.preventDefault();
+    if (submitting || cooldownSeconds > 0) return;
     setError('');
     setMessage('');
     setSubmitting(true);
+    setCooldownSeconds(60);
 
     try {
       const { data } = await resendVerificationLink(email);
@@ -71,7 +90,7 @@ const VerifyEmailPage = () => {
         <p className="mt-3 text-slate-300">
           {verificationToken
             ? 'Click below to verify your email address. You can then sign in to your account.'
-            : 'Open the verification link we sent to your email. The link expires after 24 hours.'}
+            : 'Open the verification link we sent to your email. It expires at the time shown in the message.'}
         </p>
 
         {verificationToken && (
@@ -96,16 +115,17 @@ const VerifyEmailPage = () => {
             onChange={(event) => setEmail(event.target.value)}
             required
             type="email"
+            pattern="[^@]+@gmail[.]com"
             autoComplete="email"
             placeholder="Email"
             className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500"
           />
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || cooldownSeconds > 0}
             className="w-full rounded-3xl border border-white/15 px-6 py-3 font-semibold text-white hover:bg-white/5 disabled:cursor-wait disabled:opacity-60"
           >
-            {submitting ? 'Sending...' : 'Send a new verification link'}
+            {submitting ? 'Sending...' : cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : 'Send a new verification link'}
           </button>
         </form>
 

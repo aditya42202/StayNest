@@ -22,7 +22,16 @@ import { sendEmail } from '../utils/sendEmail.js';
 import { canonicalRole, normalizeRole } from '../utils/roles.js';
 
 const saltRounds = 12;
-const verificationLinkLifetimeMs = 24 * 60 * 60 * 1000;
+const verificationTokenLifetimeMinutes = Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 30);
+const verificationResendCooldownSeconds = Number(process.env.EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS || 60);
+if (!Number.isInteger(verificationTokenLifetimeMinutes) || verificationTokenLifetimeMinutes < 1) {
+  throw new Error('EMAIL_VERIFICATION_TOKEN_TTL_MINUTES must be a positive integer');
+}
+if (!Number.isInteger(verificationResendCooldownSeconds) || verificationResendCooldownSeconds < 1) {
+  throw new Error('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS must be a positive integer');
+}
+const verificationLinkLifetimeMs = verificationTokenLifetimeMinutes * 60 * 1000;
+const verificationResendCooldownMs = verificationResendCooldownSeconds * 1000;
 const maxVerificationAttempts = 5;
 
 const authUser = (user) => ({
@@ -48,8 +57,14 @@ const logEmailDeliveryFailure = (operation, error) => {
   };
   if (typeof error?.code === 'string') details.code = error.code;
   if (Number.isInteger(error?.responseCode)) details.responseCode = error.responseCode;
-  console.error(`${operation} failed`, details);
+  console.error(JSON.stringify({ event: operation, ...details }));
 };
+
+const verificationEmail = (verificationUrl) => ({
+  subject: 'Verify your StayNest AI account',
+  text: `Verify your email by opening this link within ${verificationTokenLifetimeMinutes} minutes:\n\n${verificationUrl}\n\nIf the link is unavailable, copy and paste the URL into your browser. If you did not create this account, you can ignore this email.`,
+  html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#172033"><h1>Verify your email</h1><p>Confirm your email address to finish creating your StayNest AI account.</p><p><a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Verify email</a></p><p>This link expires in ${verificationTokenLifetimeMinutes} minutes.</p><p>If the button does not work, copy and paste this URL into your browser:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p><p>If you did not create this account, you can ignore this email.</p></div>`
+});
 
 const getClientUrl = () => (
   (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173')
@@ -116,6 +131,7 @@ export const registerUser = async (req, res) => {
       emailVerificationRequired: true,
       emailVerificationCodeHash: verificationTokenHash,
       emailVerificationExpires: new Date(Date.now() + verificationLinkLifetimeMs),
+      emailVerificationResendAfter: new Date(Date.now() + verificationResendCooldownMs),
       emailVerificationAttempts: 0
     });
   } catch (error) {
@@ -130,13 +146,12 @@ export const registerUser = async (req, res) => {
   try {
     await sendEmail({
       to: normalizedEmail,
-      subject: 'Verify your StayNest AI account',
-      text: `Welcome to StayNest AI. Verify your email by opening this link within 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`
+      ...verificationEmail(verificationUrl)
     });
   } catch (emailError) {
     logEmailDeliveryFailure('Verification email delivery', emailError);
     res.status(503);
-    throw new Error('Your account was created, but the verification email could not be sent. Request a new link to continue.');
+    throw new Error('Your account was created, but the verification email could not be sent. Please wait briefly, then request a new link from the verification page.');
   }
 
   res.status(201).json({
@@ -290,7 +305,8 @@ export const verifyEmail = async (req, res) => {
         $unset: {
           emailVerificationCodeHash: '',
           emailVerificationSalt: '',
-          emailVerificationExpires: ''
+          emailVerificationExpires: '',
+          emailVerificationResendAfter: ''
         }
       },
       { new: true, runValidators: true }
@@ -321,6 +337,7 @@ export const verifyEmail = async (req, res) => {
       user.emailVerificationCodeHash = undefined;
       user.emailVerificationSalt = undefined;
       user.emailVerificationExpires = undefined;
+      user.emailVerificationResendAfter = undefined;
       user.emailVerificationAttempts = 0;
     }
     await user.save();
@@ -349,31 +366,46 @@ export const resendVerificationEmail = async (req, res) => {
     throw new Error('Email verification is not configured. Please try again later.');
   }
 
-  const user = await User.findOne({ email, verified: false });
+  const now = new Date();
+  const verificationToken = randomBytes(32).toString('hex');
+  const user = await User.findOneAndUpdate(
+    {
+      email,
+      verified: false,
+      $or: [
+        { emailVerificationResendAfter: { $exists: false } },
+        { emailVerificationResendAfter: { $lte: now } }
+      ]
+    },
+    {
+      $set: {
+        emailVerificationRequired: true,
+        emailVerificationCodeHash: createHash('sha256').update(verificationToken).digest('hex'),
+        emailVerificationExpires: new Date(now.getTime() + verificationLinkLifetimeMs),
+        emailVerificationResendAfter: new Date(now.getTime() + verificationResendCooldownMs),
+        emailVerificationAttempts: 0
+      },
+      $unset: { emailVerificationSalt: '' }
+    },
+    { new: true, runValidators: true }
+  );
   if (user) {
-    const verificationToken = randomBytes(32).toString('hex');
-    user.emailVerificationRequired = true;
-    user.emailVerificationCodeHash = createHash('sha256').update(verificationToken).digest('hex');
-    user.emailVerificationSalt = undefined;
-    user.emailVerificationExpires = new Date(Date.now() + verificationLinkLifetimeMs);
-    user.emailVerificationAttempts = 0;
-    await user.save();
-
     const verificationUrl = `${getClientUrl()}/verify-email?token=${verificationToken}`;
     try {
       await sendEmail({
         to: email,
-        subject: 'Verify your StayNest AI account',
-        text: `Verify your email by opening this link within 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`
+        ...verificationEmail(verificationUrl)
       });
     } catch (emailError) {
       logEmailDeliveryFailure('Verification email delivery', emailError);
       res.status(503);
-      throw new Error('The verification email could not be sent. Please try again later.');
+      throw new Error('The verification email could not be sent. Please wait briefly, then request another link.');
     }
   }
 
-  res.json({ message: 'If an unverified account exists for that email, a new verification link has been sent.' });
+  res.json({
+    message: `If an unverified account exists and is eligible for a resend, a verification link will be sent. Please wait ${verificationResendCooldownSeconds} seconds before trying again.`
+  });
 };
 
 export const refreshSession = async (req, res) => {

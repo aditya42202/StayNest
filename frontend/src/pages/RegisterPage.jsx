@@ -8,13 +8,16 @@ const RegisterPage = () => {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user' });
   const [error, setError] = useState('');
   const [emailAlreadyRegistered, setEmailAlreadyRegistered] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e) => setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setError('');
     setEmailAlreadyRegistered(false);
+    setSubmitting(true);
     try {
       const { data } = await apiClient.post('/auth/register', form);
       if (data.verificationRequired) {
@@ -46,6 +49,8 @@ const RegisterPage = () => {
         return;
       }
       setError(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -95,7 +100,7 @@ const RegisterPage = () => {
               Sign in or resend your verification email
             </Link>
           )}
-          <button type="submit" className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95">Register</button>
+          <button type="submit" disabled={submitting} className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95 disabled:cursor-wait disabled:opacity-60">{submitting ? 'Creating account...' : 'Register'}</button>
         </form>
       </div>
     </section>
