@@ -4,7 +4,7 @@ services:
     env: node
     plan: starter
     region: oregon
-    repo: https://github.com/<your-github-username>/<your-repo-name>
+    repo: https://github.com/aditya42202/StayNest.git
     branch: main
     buildCommand: cd backend && npm ci
     startCommand: cd backend && npm start
@@ -21,9 +21,9 @@ services:
       - key: JWT_ACCESS_EXPIRES_IN
         value: $JWT_ACCESS_EXPIRES_IN
       - key: CLIENT_URL
-        value: https://stay-nest-eight.vercel.app
+        value: https://pennywise-expense-tracker-ten.vercel.app
       - key: FRONTEND_URL
-        value: https://stay-nest-eight.vercel.app
+        value: https://pennywise-expense-tracker-ten.vercel.app
       - key: CLOUDINARY_CLOUD_NAME
         value: $CLOUDINARY_CLOUD_NAME
       - key: CLOUDINARY_API_KEY
@@ -39,7 +39,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         value: $GOOGLE_CLIENT_SECRET
       - key: GOOGLE_CALLBACK_URL
-        value: https://staynest-1-ihrf.onrender.com/api/auth/google/callback
+        value: https://expense-tracker-l07o.onrender.com/api/auth/google/callback
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT

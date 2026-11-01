@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createEmailVerificationCode,
   hashEmailVerificationCode,
+  isValidEmail,
   isValidPassword,
   matchesEmailVerificationCode
 } from '../src/utils/authSecurity.js';
@@ -29,4 +30,12 @@ test('password validation enforces bcrypt-safe length boundaries', () => {
   assert.equal(isValidPassword('long-enough-password'), true);
   assert.equal(isValidPassword('é'.repeat(37)), false);
   assert.equal(isValidPassword(null), false);
+});
+
+test('email validation accepts normalized addresses and rejects malformed input', () => {
+  assert.equal(isValidEmail('tenant@example.com'), true);
+  assert.equal(isValidEmail(' tenant@example.com '), true);
+  assert.equal(isValidEmail('tenant@localhost'), false);
+  assert.equal(isValidEmail('not-an-email'), false);
+  assert.equal(isValidEmail(null), false);
 });

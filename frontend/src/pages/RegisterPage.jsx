@@ -7,12 +7,14 @@ const RegisterPage = () => {
   const location = useLocation();
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user' });
   const [error, setError] = useState('');
+  const [emailAlreadyRegistered, setEmailAlreadyRegistered] = useState(false);
 
   const handleChange = (e) => setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailAlreadyRegistered(false);
     try {
       const { data } = await apiClient.post('/auth/register', form);
       if (data.verificationRequired) {
@@ -35,6 +37,7 @@ const RegisterPage = () => {
       });
     } catch (err) {
       const message = err.response?.data?.message || 'Registration failed';
+      setEmailAlreadyRegistered(err.response?.status === 409);
       if (message.includes('account was created')) {
         navigate('/verify-email', {
           replace: true,
@@ -53,7 +56,7 @@ const RegisterPage = () => {
         <p className="mt-3 text-slate-300">Register as a tenant, owner, or approved administrator.</p>
 
         <form onSubmit={handleSubmit} className="mt-10 space-y-5">
-          <input name="name" value={form.name} onChange={handleChange} required placeholder="Name" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
+          <input name="name" value={form.name} onChange={handleChange} required minLength={2} maxLength={80} placeholder="Name" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           <input name="email" value={form.email} onChange={handleChange} required type="email" pattern="[^@]+@gmail[.]com" title="Use an @gmail.com email address." placeholder="name@gmail.com" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           <p className="-mt-3 text-sm text-slate-400">Use an @gmail.com email address to register.</p>
           <input name="password" value={form.password} onChange={handleChange} required minLength={8} maxLength={72} type="password" placeholder="Password" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
@@ -87,6 +90,11 @@ const RegisterPage = () => {
             </p>
           </fieldset>
           {error && <p className="text-sm text-rose-400">{error}</p>}
+          {emailAlreadyRegistered && (
+            <Link to="/login" state={{ email: form.email, from: location.state?.from }} className="block text-sm text-blue-300 underline">
+              Sign in or resend your verification email
+            </Link>
+          )}
           <button type="submit" className="w-full rounded-3xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 font-semibold text-white shadow-xl shadow-blue-500/20 hover:opacity-95">Register</button>
         </form>
       </div>

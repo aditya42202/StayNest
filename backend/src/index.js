@@ -38,9 +38,11 @@ const configuredClientUrls = [process.env.CLIENT_URL, process.env.FRONTEND_URL]
   .flatMap((value) => value.split(','))
   .map((url) => url.trim())
   .filter(Boolean);
-const clientUrls = isProduction
-  ? ['https://stay-nest-eight.vercel.app']
-  : [...new Set(configuredClientUrls.map((url) => new URL(url).origin))];
+const clientUrls = configuredClientUrls.length
+  ? [...new Set(configuredClientUrls.map((url) => new URL(url).origin))]
+  : isProduction
+    ? []
+    : ['http://localhost:5173'];
 
 app.use(helmet());
 app.use(

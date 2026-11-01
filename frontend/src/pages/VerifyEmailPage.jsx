@@ -85,9 +85,6 @@ const VerifyEmailPage = () => {
           </button>
         )}
 
-        {location.state?.email && !verificationToken && (
-          <p className="mt-5 text-slate-300">Verification email sent to {location.state.email}.</p>
-        )}
         {error && <p role="alert" className="mt-5 text-sm text-rose-400">{error}</p>}
         {message && <p role="status" className="mt-5 text-sm text-emerald-300">{message}</p>}
 

@@ -13,6 +13,7 @@ import {
 } from '../utils/authSession.js';
 import {
   hashEmailVerificationCode,
+  isValidEmail,
   isValidPassword,
   matchesEmailVerificationCode,
   normalizeEmail
@@ -35,8 +36,20 @@ const authUser = (user) => ({
 const isEmailServiceConfigured = () => Boolean(
   process.env.EMAIL_HOST &&
   process.env.EMAIL_USER &&
-  process.env.EMAIL_PASS
+  process.env.EMAIL_PASS &&
+  Number.isInteger(Number(process.env.EMAIL_PORT || 587)) &&
+  Number(process.env.EMAIL_PORT || 587) > 0 &&
+  Number(process.env.EMAIL_PORT || 587) <= 65535
 );
+
+const logEmailDeliveryFailure = (operation, error) => {
+  const details = {
+    name: error instanceof Error ? error.name : 'UnknownError'
+  };
+  if (typeof error?.code === 'string') details.code = error.code;
+  if (Number.isInteger(error?.responseCode)) details.responseCode = error.responseCode;
+  console.error(`${operation} failed`, details);
+};
 
 const getClientUrl = () => (
   (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173')
@@ -46,7 +59,7 @@ const getClientUrl = () => (
 );
 
 export const registerUser = async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role } = req.body || {};
   const requestedRole = canonicalRole(role || 'user');
   const normalizedEmail = normalizeEmail(email);
   const normalizedName = typeof name === 'string' ? name.trim() : '';
@@ -59,7 +72,7 @@ export const registerUser = async (req, res) => {
     res.status(400);
     throw new Error('Password must be at least 8 characters and no more than 72 UTF-8 bytes');
   }
-  if (!/^[^@\s]+@gmail\.com$/.test(normalizedEmail)) {
+  if (!isValidEmail(normalizedEmail) || !/^[^@\s]+@gmail\.com$/.test(normalizedEmail)) {
     res.status(400);
     throw new Error('Please use a valid @gmail.com email address');
   }
@@ -79,31 +92,39 @@ export const registerUser = async (req, res) => {
     }
   }
 
+  const existingUser = await User.findOne({ email: normalizedEmail });
+  if (existingUser) {
+    res.status(409);
+    throw new Error('Email already registered. Sign in to request a new verification email if your account is unverified.');
+  }
   if (!isEmailServiceConfigured()) {
     res.status(503);
     throw new Error('Email verification is not configured. Please try again later.');
   }
 
-  const existingUser = await User.findOne({ email: normalizedEmail });
-  if (existingUser) {
-    res.status(400);
-    throw new Error('Email already registered');
-  }
-
   const hashedPassword = await bcrypt.hash(password, saltRounds);
   const verificationToken = randomBytes(32).toString('hex');
   const verificationTokenHash = createHash('sha256').update(verificationToken).digest('hex');
-  const user = await User.create({
-    name: normalizedName,
-    email: normalizedEmail,
-    password: hashedPassword,
-    role: requestedRole,
-    verified: false,
-    emailVerificationRequired: true,
-    emailVerificationCodeHash: verificationTokenHash,
-    emailVerificationExpires: new Date(Date.now() + verificationLinkLifetimeMs),
-    emailVerificationAttempts: 0
-  });
+  let user;
+  try {
+    user = await User.create({
+      name: normalizedName,
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: requestedRole,
+      verified: false,
+      emailVerificationRequired: true,
+      emailVerificationCodeHash: verificationTokenHash,
+      emailVerificationExpires: new Date(Date.now() + verificationLinkLifetimeMs),
+      emailVerificationAttempts: 0
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      res.status(409);
+      throw new Error('Email already registered. Sign in to request a new verification email if your account is unverified.');
+    }
+    throw error;
+  }
 
   const verificationUrl = `${getClientUrl()}/verify-email?token=${verificationToken}`;
   try {
@@ -113,7 +134,7 @@ export const registerUser = async (req, res) => {
       text: `Welcome to StayNest AI. Verify your email by opening this link within 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`
     });
   } catch (emailError) {
-    console.error('Verification email could not be sent:', emailError.message);
+    logEmailDeliveryFailure('Verification email delivery', emailError);
     res.status(503);
     throw new Error('Your account was created, but the verification email could not be sent. Request a new link to continue.');
   }
@@ -125,16 +146,24 @@ export const registerUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email: normalizeEmail(email) }).select('+password');
+  const { email, password } = req.body || {};
+  const normalizedEmail = normalizeEmail(email);
+  if (!isValidEmail(normalizedEmail)) {
+    res.status(400);
+    throw new Error('Please enter a valid email address');
+  }
+  if (!isValidPassword(password)) {
+    res.status(400);
+    throw new Error('Password must be at least 8 characters and no more than 72 UTF-8 bytes');
+  }
+  const user = await User.findOne({ email: normalizedEmail }).select('+password');
 
-  const passwordFitsBcrypt = typeof password === 'string' && Buffer.byteLength(password, 'utf8') <= 72;
-  if (user && user.password && passwordFitsBcrypt && (await bcrypt.compare(password, user.password))) {
+  if (user && user.password && (await bcrypt.compare(password, user.password))) {
     if (user.blocked) {
       res.status(403);
       throw new Error('This account has been blocked');
     }
-    if (user.emailVerificationRequired && !user.verified) {
+    if (!user.verified) {
       res.status(403);
       throw new Error('Please verify your email address before signing in');
     }
@@ -150,10 +179,10 @@ export const loginUser = async (req, res) => {
 };
 
 export const resetPasswordRequest = async (req, res) => {
-  const email = normalizeEmail(req.body.email);
-  if (!email) {
+  const email = normalizeEmail(req.body?.email);
+  if (!isValidEmail(email)) {
     res.status(400);
-    throw new Error('Email is required');
+    throw new Error('Please enter a valid email address');
   }
   if (!isEmailServiceConfigured()) {
     res.status(503);
@@ -183,7 +212,7 @@ export const resetPasswordRequest = async (req, res) => {
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
       await user.save();
-      console.error('Password reset email could not be sent:', emailError.message);
+      logEmailDeliveryFailure('Password reset email delivery', emailError);
       res.status(503);
       throw new Error('Password reset email could not be sent. Please try again later.');
     }
@@ -234,42 +263,59 @@ export const resetPassword = async (req, res) => {
 };
 
 export const verifyEmail = async (req, res) => {
-  const email = normalizeEmail(req.body.email);
-  const { code, token } = req.body;
+  const email = normalizeEmail(req.body?.email);
+  const { code, token } = req.body || {};
   const isLinkVerification = typeof token === 'string';
-  if (!isLinkVerification && (!email || typeof code !== 'string')) {
+  if (!isLinkVerification && (!isValidEmail(email) || typeof code !== 'string')) {
     res.status(400);
     throw new Error('A verification link or email and six-digit verification code are required');
   }
 
-  const tokenHash = isLinkVerification && /^[a-f\d]{64}$/i.test(token)
-    ? createHash('sha256').update(token).digest('hex')
-    : null;
-  const verificationQuery = isLinkVerification
-    ? {
-      emailVerificationCodeHash: tokenHash,
-      emailVerificationRequired: true,
-      verified: false,
-      emailVerificationExpires: { $gt: new Date() }
+  if (isLinkVerification) {
+    if (!/^[a-f\d]{64}$/i.test(token)) {
+      res.status(400);
+      throw new Error('Verification link is invalid, expired, or has already been used');
     }
-    : { email, emailVerificationRequired: true, verified: false };
-  let user;
-  if (tokenHash || !isLinkVerification) {
-    user = await User.findOne(verificationQuery)
-      .select('+emailVerificationCodeHash +emailVerificationSalt +emailVerificationExpires');
+
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const user = await User.findOneAndUpdate(
+      {
+        emailVerificationCodeHash: tokenHash,
+        emailVerificationRequired: true,
+        verified: false,
+        emailVerificationExpires: { $gt: new Date() }
+      },
+      {
+        $set: { verified: true, emailVerificationRequired: false, emailVerificationAttempts: 0 },
+        $unset: {
+          emailVerificationCodeHash: '',
+          emailVerificationSalt: '',
+          emailVerificationExpires: ''
+        }
+      },
+      { new: true, runValidators: true }
+    );
+    if (!user) {
+      res.status(400);
+      throw new Error('Verification link is invalid, expired, or has already been used');
+    }
+    return res.json({ message: 'Email verified successfully' });
   }
+
+  const user = await User.findOne({ email, emailVerificationRequired: true, verified: false })
+    .select('+emailVerificationCodeHash +emailVerificationSalt +emailVerificationExpires');
 
   if (!user) {
     res.status(400);
-    throw new Error('Verification link or code is invalid or has expired');
+    throw new Error('Verification link or code is invalid, expired, or has already been used');
   }
 
-  if (!isLinkVerification && (
+  if (
     !user.emailVerificationExpires ||
     user.emailVerificationExpires <= new Date() ||
     user.emailVerificationAttempts >= maxVerificationAttempts ||
     !matchesEmailVerificationCode(email, code, user.emailVerificationSalt, user.emailVerificationCodeHash)
-  )) {
+  ) {
     user.emailVerificationAttempts += 1;
     if (user.emailVerificationAttempts >= maxVerificationAttempts) {
       user.emailVerificationCodeHash = undefined;
@@ -279,7 +325,7 @@ export const verifyEmail = async (req, res) => {
     }
     await user.save();
     res.status(400);
-    throw new Error('Verification link or code is invalid or has expired');
+    throw new Error('Verification link or code is invalid, expired, or has already been used');
   }
 
   user.verified = true;
@@ -293,10 +339,10 @@ export const verifyEmail = async (req, res) => {
 };
 
 export const resendVerificationEmail = async (req, res) => {
-  const email = normalizeEmail(req.body.email);
-  if (!email) {
+  const email = normalizeEmail(req.body?.email);
+  if (!isValidEmail(email)) {
     res.status(400);
-    throw new Error('Email is required');
+    throw new Error('Please enter a valid email address');
   }
   if (!isEmailServiceConfigured()) {
     res.status(503);
@@ -321,7 +367,7 @@ export const resendVerificationEmail = async (req, res) => {
         text: `Verify your email by opening this link within 24 hours:\n\n${verificationUrl}\n\nIf you did not create this account, you can ignore this email.`
       });
     } catch (emailError) {
-      console.error('Verification email could not be sent:', emailError.message);
+      logEmailDeliveryFailure('Verification email delivery', emailError);
       res.status(503);
       throw new Error('The verification email could not be sent. Please try again later.');
     }
@@ -354,7 +400,7 @@ export const refreshSession = async (req, res) => {
     res.status(401);
     throw new Error('Refresh session is invalid or has expired');
   }
-  if (user.emailVerificationRequired && !user.verified) {
+  if (!user.verified) {
     clearRefreshCookie(res);
     res.status(403);
     throw new Error('Please verify your email address before continuing');
