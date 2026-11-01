@@ -48,6 +48,7 @@ const ResetPasswordPage = () => {
             onChange={(event) => setPassword(event.target.value)}
             required
             minLength={8}
+            maxLength={72}
             type="password"
             autoComplete="new-password"
             placeholder="New password"
@@ -60,6 +61,7 @@ const ResetPasswordPage = () => {
             onChange={(event) => setConfirmPassword(event.target.value)}
             required
             minLength={8}
+            maxLength={72}
             type="password"
             autoComplete="new-password"
             placeholder="Confirm new password"

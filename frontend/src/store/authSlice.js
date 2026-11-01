@@ -31,9 +31,17 @@ const authSlice = createSlice({
       state.loading = false;
       state.error = action.payload;
     },
+    authRequestComplete(state) {
+      state.loading = false;
+      state.error = null;
+    },
     authUserUpdated(state, action) {
       state.user = { ...state.user, ...action.payload };
       window.sessionStorage.setItem('staynest_user', JSON.stringify(state.user));
+    },
+    tokenRefreshed(state, action) {
+      state.token = action.payload;
+      window.sessionStorage.setItem('staynest_token', action.payload);
     },
     logout(state) {
       state.user = null;
@@ -44,5 +52,13 @@ const authSlice = createSlice({
   }
 });
 
-export const { loginRequest, loginSuccess, loginFailure, authUserUpdated, logout } = authSlice.actions;
+export const {
+  loginRequest,
+  loginSuccess,
+  loginFailure,
+  authRequestComplete,
+  authUserUpdated,
+  tokenRefreshed,
+  logout
+} = authSlice.actions;
 export default authSlice.reducer;

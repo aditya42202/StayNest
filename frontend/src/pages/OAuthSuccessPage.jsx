@@ -1,19 +1,35 @@
-import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import apiClient from '../api/apiClient.js';
+import { loginSuccess } from '../store/authSlice.js';
 
 const OAuthSuccessPage = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const requestStarted = useRef(false);
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    if (token) {
-      window.sessionStorage.setItem('staynest_token', token);
-      navigate('/dashboard', { replace: true });
-    } else {
-      navigate('/login', { replace: true });
-    }
-  }, [navigate, searchParams]);
+    if (requestStarted.current) return undefined;
+    requestStarted.current = true;
+
+    const finishSignIn = async () => {
+      try {
+        const { data } = await apiClient.post('/auth/refresh');
+        dispatch(loginSuccess(data));
+        navigate('/dashboard', { replace: true });
+      } catch (error) {
+        console.error('Google sign-in session could not be restored:', error.message);
+        navigate('/login', {
+          replace: true,
+          state: { message: 'Google sign-in could not be completed. Please try again.' }
+        });
+      }
+    };
+
+    finishSignIn();
+    return undefined;
+  }, [dispatch, navigate]);
 
   return (
     <section className="mx-auto max-w-3xl px-6 pb-24 pt-4 text-white">

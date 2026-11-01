@@ -11,10 +11,12 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setNeedsVerification(false);
     dispatch(loginRequest());
     try {
       const { data } = await apiClient.post('/auth/login', { email, password });
@@ -23,6 +25,7 @@ const LoginPage = () => {
     } catch (err) {
       const message = err.response?.data?.message || 'Login failed';
       setError(message);
+      setNeedsVerification(err.response?.status === 403 && message.toLowerCase().includes('verify'));
       dispatch(loginFailure(message));
     }
   };
@@ -38,6 +41,11 @@ const LoginPage = () => {
           <input value={email} onChange={(e) => setEmail(e.target.value)} required type="email" placeholder="Email" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           <input value={password} onChange={(e) => setPassword(e.target.value)} required type="password" placeholder="Password" className="w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white outline-none placeholder:text-slate-500" />
           {error && <p className="text-sm text-rose-400">{error}</p>}
+          {needsVerification && (
+            <Link to="/verify-email" state={{ email }} className="block text-sm text-blue-300 underline">
+              Verify your email address
+            </Link>
+          )}
           <div className="text-right">
             <Link to="/forgot-password" className="text-sm text-blue-300 hover:text-white">Forgot password?</Link>
           </div>

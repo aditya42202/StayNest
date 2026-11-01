@@ -1,10 +1,13 @@
 import 'express-async-errors';
 import 'dotenv/config';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import helmet from 'helmet';
 import passport from 'passport';
 
 import connectDB from './config/db.js';
+import { getJWTSecret } from './utils/generateToken.js';
 
 import authRoutes from './routes/authRoutes.js';
 import propertyRoutes from './routes/propertyRoutes.js';
@@ -23,29 +26,30 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 const app = express();
 
+getJWTSecret();
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+
 // Connect Database
 connectDB();
 
-// Allowed Client URLs
-const clientUrls = (
-  process.env.CLIENT_URL || "http://localhost:5173"
-)
-  .split(",")
-  .map(url => url.trim());
+const configuredClientUrls = [process.env.CLIENT_URL, process.env.FRONTEND_URL]
+  .filter(Boolean)
+  .flatMap((value) => value.split(','))
+  .map((url) => url.trim())
+  .filter(Boolean);
+const clientUrls = [...new Set(
+  configuredClientUrls
+    .map((url) => new URL(url).origin)
+)];
+if (process.env.NODE_ENV === 'production' && clientUrls.length === 0) {
+  throw new Error('CLIENT_URL or FRONTEND_URL must be configured in production');
+}
 
+app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-
-      if (!origin)
-        return callback(null, true);
-
-      if (
-        clientUrls.includes(origin) ||
-        origin.startsWith("http://localhost") ||
-        origin.startsWith("http://127.0.0.1") ||
-        origin.endsWith(".vercel.app")
-      ) {
+      if (!origin || clientUrls.includes(origin)) {
         return callback(null, true);
       }
 
@@ -60,6 +64,7 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), han
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(passport.initialize());
 
 // Health Check

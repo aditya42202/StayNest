@@ -1,6 +1,12 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { loginRequest, loginSuccess, loginFailure, logout } from '../store/authSlice.js';
-import { login as loginApi, register as registerApi } from '../api/authApi.js';
+import {
+  authRequestComplete,
+  loginRequest,
+  loginSuccess,
+  loginFailure,
+  logout
+} from '../store/authSlice.js';
+import { login as loginApi, logout as logoutApi, register as registerApi } from '../api/authApi.js';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
@@ -20,12 +26,22 @@ export const useAuth = () => {
     dispatch(loginRequest());
     try {
       const response = await registerApi(data);
-      dispatch(loginSuccess(response.data));
+      dispatch(authRequestComplete());
+      return response.data;
     } catch (error) {
       dispatch(loginFailure(error.response?.data?.message || 'Registration failed'));
+      throw error;
     }
   };
 
-  const signOut = () => dispatch(logout());
+  const signOut = async () => {
+    try {
+      await logoutApi();
+    } catch (error) {
+      console.error('Unable to revoke the server session during sign-out:', error.message);
+    } finally {
+      dispatch(logout());
+    }
+  };
   return { auth, signIn, signUp, signOut };
 };

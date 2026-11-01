@@ -2,15 +2,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../store/authSlice.js';
+import { logout as logoutApi } from '../api/authApi.js';
 
 const Navbar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth);
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logoutApi();
+    } catch (error) {
+      console.error('Unable to revoke the server session during sign-out:', error.message);
+    } finally {
+      dispatch(logout());
+      navigate('/login');
+    }
   };
 
   return (
